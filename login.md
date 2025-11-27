@@ -1,0 +1,705 @@
+Here’s a complete, consistent set of files:
+
+- `lib/supabase/client.ts`
+- `lib/supabase/server.ts`
+- `app/page.tsx` (home)
+- `app/login/page.tsx` + `app/login/LoginForm.tsx`
+- `app/register/page.tsx` + `app/register/RegisterForm.tsx`
+- `app/dashboard/page.tsx` + `app/dashboard/LogoutButton.tsx`
+
+Assumptions:
+
+- App Router (`app/` directory)
+- Environment vars set:  
+  `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- shadcn/ui components exist in `@/components/ui/*`
+- Sonner `<Toaster />` is already added in `app/layout.tsx` (as in earlier answer)
+
+Adjust `@/...` paths if your structure is different.
+
+---
+
+## `lib/supabase/client.ts`
+
+```ts
+// lib/supabase/client.ts
+import { createBrowserClient } from "@supabase/ssr";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+let client: SupabaseClient | null = null;
+
+export function createClient() {
+  if (!client) {
+    client = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+  }
+
+  return client;
+}
+```
+
+---
+
+## `lib/supabase/server.ts`
+
+```ts
+// lib/supabase/server.ts
+import { cookies } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+export function createClient(): SupabaseClient {
+  const cookieStore = cookies();
+
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+      },
+    }
+  );
+}
+```
+
+---
+
+## `app/page.tsx` (home)
+
+```tsx
+// app/page.tsx
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { Button } from "@/components/ui/button";
+
+export default async function HomePage() {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    redirect("/dashboard");
+  }
+
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-gradient-to-b from-background via-muted/40 to-background px-4">
+      <div className="w-full max-w-md space-y-4 text-center">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-primary/80">
+          Supabase Auth
+        </p>
+        <h1 className="text-xl font-semibold tracking-tight">
+          Minimal Auth Demo
+        </h1>
+        <p className="text-xs text-muted-foreground">
+          Sign in or create an account to access your dashboard.
+        </p>
+        <div className="mt-2 flex justify-center gap-2">
+          <Button asChild size="sm">
+            <Link href="/login">Sign in</Link>
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/register">Register</Link>
+          </Button>
+        </div>
+      </div>
+    </main>
+  );
+}
+```
+
+---
+
+## Login
+
+### `app/login/page.tsx` (server)
+
+```tsx
+// app/login/page.tsx
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import LoginForm from "./LoginForm";
+
+export default async function LoginPage() {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    redirect("/dashboard");
+  }
+
+  return <LoginForm />;
+}
+```
+
+### `app/login/LoginForm.tsx` (client)
+
+```tsx
+// app/login/LoginForm.tsx
+"use client";
+
+import { FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { toast } from "sonner";
+
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+
+export default function LoginForm() {
+  const router = useRouter();
+  const supabase = createClient();
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = async (e: FormEvent) => {
+    e.preventDefault();
+
+    if (!email || !password) {
+      toast.error("Please fill in both email and password.");
+      return;
+    }
+
+    setLoading(true);
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      setLoading(false);
+
+      const msg = (error.message || "").toLowerCase();
+      if (msg.includes("invalid login credentials")) {
+        toast.error("Invalid login credentials");
+      } else {
+        toast.error(error.message || "Login failed. Please try again.");
+      }
+
+      return;
+    }
+
+    toast.success("Logged in successfully.");
+    router.push("/dashboard");
+    router.refresh();
+  };
+
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-gradient-to-b from-background via-muted/40 to-background px-4">
+      <div className="w-full max-w-md space-y-4">
+        {/* Heading */}
+        <div className="space-y-1 text-center">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-primary/80">
+            Supabase Auth
+          </p>
+          <h1 className="text-xl font-semibold tracking-tight">Sign in</h1>
+          <p className="text-xs text-muted-foreground">
+            Access your dashboard with your email and password.
+          </p>
+        </div>
+
+        {/* Card */}
+        <Card className="border-border/70 bg-card/95 shadow-sm backdrop-blur">
+          <CardHeader className="pb-1.5">
+            <CardTitle className="text-sm">Welcome back</CardTitle>
+            <CardDescription className="text-[11px]">
+              Enter your credentials to continue.
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent className="pt-1">
+            <form className="space-y-3" onSubmit={handleLogin}>
+              <div className="space-y-1">
+                <Label htmlFor="email" className="text-xs">
+                  Email
+                </Label>
+                <Input
+                  id="email"
+                  type="email"
+                  autoComplete="email"
+                  placeholder="you@example.com"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={loading}
+                  className="h-9 text-sm"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="password" className="text-xs">
+                  Password
+                </Label>
+                <Input
+                  id="password"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={loading}
+                  className="h-9 text-sm"
+                />
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={loading}
+                size="sm"
+              >
+                {loading ? "Signing in..." : "Sign in"}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        {/* Bottom text */}
+        <p className="text-center text-xs text-muted-foreground">
+          Don&apos;t have an account?{" "}
+          <button
+            type="button"
+            className="font-medium text-primary underline-offset-2 hover:underline"
+            onClick={() => router.push("/register")}
+            disabled={loading}
+          >
+            Create one
+          </button>
+        </p>
+      </div>
+    </main>
+  );
+}
+```
+
+---
+
+## Register
+
+### `app/register/page.tsx` (server)
+
+```tsx
+// app/register/page.tsx
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import RegisterForm from "./RegisterForm";
+
+export default async function RegisterPage() {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    redirect("/dashboard");
+  }
+
+  return <RegisterForm />;
+}
+```
+
+### `app/register/RegisterForm.tsx` (client)
+
+```tsx
+// app/register/RegisterForm.tsx
+"use client";
+
+import { FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { toast } from "sonner";
+
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+
+type Step = 1 | 2;
+
+export default function RegisterForm() {
+  const router = useRouter();
+  const supabase = createClient();
+
+  const [step, setStep] = useState<Step>(1);
+
+  const [username, setUsername] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  const [loading, setLoading] = useState(false);
+
+  const handleNext = () => {
+    if (!username.trim()) {
+      toast.error("Username is required.");
+      return;
+    }
+    if (!displayName.trim()) {
+      toast.error("Name is required.");
+      return;
+    }
+
+    setStep(2);
+  };
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+
+    if (step === 1) {
+      handleNext();
+      return;
+    }
+
+    if (!email || !password) {
+      toast.error("Email and password are required.");
+      return;
+    }
+
+    setLoading(true);
+
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          username,
+          display_name: displayName,
+        },
+      },
+    });
+
+    if (error) {
+      setLoading(false);
+      toast.error(error.message || "Failed to register.");
+      return;
+    }
+
+    if (!data.user) {
+      setLoading(false);
+      toast.success(
+        "Registration succeeded. Please check your email to confirm your account."
+      );
+      return;
+    }
+
+    toast.success("Registered successfully! You can now sign in.");
+    router.push("/login");
+    router.refresh();
+  };
+
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-gradient-to-b from-background via-muted/40 to-background px-4">
+      <div className="w-full max-w-md space-y-4">
+        {/* Heading */}
+        <div className="space-y-1 text-center">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-primary/80">
+            Supabase Auth
+          </p>
+          <h1 className="text-xl font-semibold tracking-tight">
+            Create account
+          </h1>
+          <p className="text-xs text-muted-foreground">
+            A simple two-step sign up process.
+          </p>
+        </div>
+
+        {/* Card */}
+        <Card className="border-border/70 bg-card/95 shadow-sm backdrop-blur">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+              <span className="font-medium">
+                Step {step} <span className="text-muted-foreground/70">of 2</span>
+              </span>
+              <span>{step === 1 ? "Basic info" : "Account details"}</span>
+            </div>
+            <CardTitle className="mt-1 text-sm">
+              {step === 1 ? "Who are you?" : "How can we reach you?"}
+            </CardTitle>
+            <CardDescription className="text-[11px]">
+              {step === 1
+                ? "Pick a username and a name. You can change these later."
+                : "Use a valid email address and a secure password."}
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent className="pt-1">
+            <form className="space-y-3" onSubmit={handleSubmit}>
+              {step === 1 && (
+                <>
+                  <div className="space-y-1">
+                    <Label htmlFor="username" className="text-xs">
+                      Username
+                    </Label>
+                    <Input
+                      id="username"
+                      placeholder="your-username"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      disabled={loading}
+                      required
+                      className="h-9 text-sm"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label htmlFor="displayName" className="text-xs">
+                      Name
+                    </Label>
+                    <Input
+                      id="displayName"
+                      placeholder="John Doe"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      disabled={loading}
+                      required
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                </>
+              )}
+
+              {step === 2 && (
+                <>
+                  <div className="rounded-md border border-dashed border-border/80 bg-muted/40 px-3 py-2 text-[11px] text-muted-foreground">
+                    <p className="flex justify-between">
+                      <span>Username</span>
+                      <span className="font-medium text-foreground">
+                        {username}
+                      </span>
+                    </p>
+                    <p className="mt-0.5 flex justify-between">
+                      <span>Name</span>
+                      <span className="font-medium text-foreground">
+                        {displayName}
+                      </span>
+                    </p>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label htmlFor="email" className="text-xs">
+                      Email
+                    </Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      autoComplete="email"
+                      placeholder="you@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      disabled={loading}
+                      required
+                      className="h-9 text-sm"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label htmlFor="password" className="text-xs">
+                      Password
+                    </Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      autoComplete="new-password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      disabled={loading}
+                      required
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Button grid */}
+              <div className="grid grid-cols-2 gap-2 pt-2">
+                {step === 1 ? (
+                  <>
+                    {/* left blank */}
+                    <span />
+                    <Button
+                      type="button"
+                      onClick={handleNext}
+                      disabled={loading}
+                      size="sm"
+                    >
+                      Next
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setStep(1)}
+                      disabled={loading}
+                      size="sm"
+                    >
+                      Back
+                    </Button>
+                    <Button type="submit" disabled={loading} size="sm">
+                      {loading ? "Creating..." : "Create account"}
+                    </Button>
+                  </>
+                )}
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+
+        {/* Bottom text */}
+        <p className="text-center text-xs text-muted-foreground">
+          Already have an account?{" "}
+          <button
+            type="button"
+            className="font-medium text-primary underline-offset-2 hover:underline"
+            onClick={() => router.push("/login")}
+            disabled={loading}
+          >
+            Sign in
+          </button>
+        </p>
+      </div>
+    </main>
+  );
+}
+```
+
+---
+
+## Dashboard
+
+### `app/dashboard/page.tsx` (server)
+
+```tsx
+// app/dashboard/page.tsx
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import LogoutButton from "./LogoutButton";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@/components/ui/card";
+
+export default async function DashboardPage() {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  const meta = (user.user_metadata || {}) as {
+    username?: string;
+    display_name?: string;
+  };
+
+  const display =
+    meta.display_name || meta.username || user.email || "Unknown user";
+
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-gradient-to-b from-background via-muted/40 to-background px-4">
+      <div className="w-full max-w-lg">
+        <Card className="border-border/70 bg-card/95 shadow-sm backdrop-blur">
+          <CardHeader>
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <CardTitle className="text-lg">Dashboard</CardTitle>
+                <CardDescription className="text-xs">
+                  Welcome back,{" "}
+                  <span className="font-semibold text-foreground">
+                    {display}
+                  </span>
+                  .
+                </CardDescription>
+              </div>
+              <LogoutButton />
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm text-muted-foreground">
+            <p>
+              Username:{" "}
+              <span className="font-medium">
+                {meta.username ?? "(not set)"}
+              </span>
+            </p>
+            <p>
+              Email:{" "}
+              <span className="font-medium">
+                {user.email ?? "(no email)"}
+              </span>
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    </main>
+  );
+}
+```
+
+### `app/dashboard/LogoutButton.tsx` (client)
+
+```tsx
+// app/dashboard/LogoutButton.tsx
+"use client";
+
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+
+export default function LogoutButton() {
+  const router = useRouter();
+  const supabase = createClient();
+
+  const handleLogout = async () => {
+    const { error } = await supabase.auth.signOut();
+
+    if (error) {
+      toast.error(error.message || "Failed to log out.");
+      return;
+    }
+
+    toast.success("Logged out successfully.");
+    router.push("/login");
+    router.refresh();
+  };
+
+  return (
+    <Button variant="outline" size="sm" onClick={handleLogout}>
+      Logout
+    </Button>
+  );
+}
+```
+
+These files together give you a full minimal auth flow with Supabase, shadcn/ui, and Sonner. If you hit any specific TypeScript/runtime error, paste it and I’ll adjust exactly to your setup.
