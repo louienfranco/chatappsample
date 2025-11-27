@@ -336,7 +336,7 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
     <div className="flex h-full flex-col items-center justify-center">
       <MessageCircle size={40} className="text-muted-foreground/40" />
       <h2 className="mt-4 font-semibold">No workspace yet</h2>
-      <p className="mt-1 text-sm text-muted-foreground mx-auto text-center">
+      <p className="mt-1 text-sm text-muted-foreground">
         Create your first workspace to start chatting.
       </p>
       <Button onClick={onCreate} className="mt-4 gap-2" size="sm">
@@ -710,7 +710,7 @@ function MembersPanel({
   );
 }
 
-// Chat Section (center / main column)
+// Chat Section
 interface ChatSectionProps {
   ws: Workspace;
   onAddMessage: (id: string, role: Role, text: string) => void;
@@ -849,7 +849,6 @@ const ChatSection = memo(function ChatSection({
             className="max-h-[120px] min-h-[36px] w-full resize-none bg-transparent py-1 text-sm outline-none"
           />
           <div className="mt-1 flex items-center gap-1">
-            {/* Keep map pattern so it's easy to add more icons later */}
             {[Sticker].map((Icon, i) => (
               <Button key={i} variant="ghost" size="icon" className="h-7 w-7">
                 <Icon size={16} />
@@ -870,6 +869,141 @@ const ChatSection = memo(function ChatSection({
     </div>
   );
 });
+
+// Sidebar shared inner content
+interface SidebarContentProps {
+  active: SectionId;
+  onClose: () => void;
+  nav: (section: SectionId) => void;
+  workspaces: Workspace[];
+  starred: Workspace[];
+  regular: Workspace[];
+  renderDraggableWorkspace: (ws: Workspace) => ReactNode;
+}
+
+function SidebarContent({
+  active,
+  onClose,
+  nav,
+  workspaces,
+  starred,
+  regular,
+  renderDraggableWorkspace,
+}: SidebarContentProps) {
+  return (
+    <>
+      <div
+        className={`flex ${HEADER_HEIGHT} items-center justify-between border-b px-3`}
+      >
+        <div className="flex items-center gap-2">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground">
+            q
+          </div>
+          <span className="text-sm font-semibold">qPal</span>
+          <span className="rounded bg-green-500/10 px-1.5 text-[9px] font-medium text-green-600">
+            v1.0
+          </span>
+        </div>
+        <button
+          onClick={onClose}
+          className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent md:hidden"
+        >
+          <X size={18} />
+        </button>
+      </div>
+
+      <nav className="flex flex-col gap-2 p-2">
+        <NavItem
+          active={active === "profile"}
+          onClick={() => nav("profile")}
+          label="Profile"
+        >
+          <User size={16} />
+        </NavItem>
+        <NavItem
+          active={active === "explore"}
+          onClick={() => nav("explore")}
+          label="Explore"
+        >
+          <Compass size={16} />
+        </NavItem>
+      </nav>
+
+      <div className="flex items-center justify-between px-5 py-2">
+        <span className="text-[10px] font-semibold uppercase text-muted-foreground">
+          Workspaces
+        </span>
+        <button
+          onClick={() => nav("create-workspace")}
+          className="text-muted-foreground hover:text-foreground"
+        >
+          <Plus size={14} />
+        </button>
+      </div>
+
+      <div
+        className="flex-1 overflow-y-auto px-2 pb-2
+                   [scrollbar-gutter:stable] 
+                   [scrollbar-width:thin]
+                   [scrollbar-color:rgba(148,163,184,0.15)_transparent]
+                   [&::-webkit-scrollbar]:w-1.5
+                   [&::-webkit-scrollbar-track]:bg-transparent
+                   [&::-webkit-scrollbar-track-piece]:bg-transparent
+                   [&::-webkit-scrollbar-corner]:bg-transparent
+                   [&::-webkit-scrollbar-button]:hidden
+                   [&::-webkit-scrollbar-thumb]:bg-muted-foreground/15
+                   [&::-webkit-scrollbar-thumb]:rounded-full"
+      >
+        {workspaces.length === 0 ? (
+          <button
+            onClick={() => nav("empty")}
+            className={`group flex w-full flex-col items-center gap-1 rounded-lg p-3 ${
+              active === "empty" ? "bg-accent" : "hover:bg-accent/50"
+            }`}
+          >
+            <Home size={16} className="text-muted-foreground" />
+            <span className="text-[11px] text-muted-foreground">
+              No workspace
+            </span>
+          </button>
+        ) : (
+          <div className="flex flex-col space-y-2">
+            {starred.length > 0 && (
+              <>
+                <p className="px-3 text-[10px] text-muted-foreground">
+                  Starred
+                </p>
+                {starred.map(renderDraggableWorkspace)}
+              </>
+            )}
+
+            {regular.length > 0 && (
+              <>
+                {starred.length > 0 && (
+                  <p className="px-3 text-[10px] text-muted-foreground">
+                    All
+                  </p>
+                )}
+                {regular.map(renderDraggableWorkspace)}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="border-t p-2">
+        <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-2 py-1.5">
+          <Avatar name="You" size="sm" />
+          <div className="flex-1">
+            <p className="text-xs font-medium">You</p>
+            <p className="text-[10px] text-muted-foreground">Online</p>
+          </div>
+          <ModeToggle />
+        </div>
+      </div>
+    </>
+  );
+}
 
 // Sidebar (memoized) with drag-and-drop reordering
 interface SidebarProps {
@@ -968,148 +1102,77 @@ const Sidebar = memo(function Sidebar({
     [workspaces, optionsFor]
   );
 
-  const renderDraggableWorkspace = (ws: Workspace) => (
-    <div
-      key={ws.id}
-      draggable
-      onDragStart={() => handleDragStart(ws.id)}
-      onDragOver={(e) => handleDragOver(e, ws.id)}
-      onDrop={() => handleDrop(ws.id)}
-      onDragEnd={handleDragEnd}
-      className="cursor-grab active:cursor-grabbing"
-    >
-      <WorkspaceItem
-        ws={ws}
-        active={active === ws.id}
-        onClick={() => handleWorkspaceClick(ws.id)}
-        onOptions={(e) => handleWorkspaceOptions(e, ws.id)}
-        optionsOpen={optionsFor?.id === ws.id}
-      />
-    </div>
+  const renderDraggableWorkspace = useCallback(
+    (ws: Workspace) => (
+      <div
+        key={ws.id}
+        draggable
+        onDragStart={() => handleDragStart(ws.id)}
+        onDragOver={(e) => handleDragOver(e, ws.id)}
+        onDrop={() => handleDrop(ws.id)}
+        onDragEnd={handleDragEnd}
+        className="cursor-grab active:cursor-grabbing"
+      >
+        <WorkspaceItem
+          ws={ws}
+          active={active === ws.id}
+          onClick={() => handleWorkspaceClick(ws.id)}
+          onOptions={(e) => handleWorkspaceOptions(e, ws.id)}
+          optionsOpen={optionsFor?.id === ws.id}
+        />
+      </div>
+    ),
+    [
+      active,
+      handleDragEnd,
+      handleDragOver,
+      handleDragStart,
+      handleDrop,
+      handleWorkspaceClick,
+      handleWorkspaceOptions,
+      optionsFor?.id,
+    ]
   );
 
   return (
     <>
-      {isOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/50 md:hidden"
-          onClick={onClose}
-        />
-      )}
+      {/* MOBILE CARD SIDEBAR + CLICK-OUTSIDE OVERLAY */}
       <aside
-        className={`fixed left-0 top-0 z-50 flex h-full w-60 flex-col border-r bg-background transition-transform md:relative md:z-auto md:w-56 md:translate-x-0 ${
-          isOpen ? "" : "-translate-x-full"
-        }`}
+        className={[
+          "fixed left-0 top-0 z-50 flex h-full w-full bg-background/40 backdrop-blur-md md:hidden",
+          "transition-transform duration-200",
+          isOpen ? "translate-x-0" : "-translate-x-full",
+        ].join(" ")}
+        onClick={onClose}
       >
         <div
-          className={`flex ${HEADER_HEIGHT} items-center justify-between border-b px-3`}
+          className="m-3 flex h[calc(100vh-1.5rem)] w-full max-w-sm flex-col overflow-hidden
+                     rounded-2xl border bg-background/90 p-2 shadow-lg"
+          onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground">
-              q
-            </div>
-            <span className="text-sm font-semibold">qPal</span>
-            <span className="rounded bg-green-500/10 px-1.5 text-[9px] font-medium text-green-600">
-              v1.0
-            </span>
-          </div>
-          <button
-            onClick={onClose}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent md:hidden"
-          >
-            <X size={18} />
-          </button>
+          <SidebarContent
+            active={active}
+            onClose={onClose}
+            nav={nav}
+            workspaces={workspaces}
+            starred={starred}
+            regular={regular}
+            renderDraggableWorkspace={renderDraggableWorkspace}
+          />
         </div>
+      </aside>
 
-        <nav className="flex flex-col gap-2 p-2">
-          <NavItem
-            active={active === "profile"}
-            onClick={() => nav("profile")}
-            label="Profile"
-          >
-            <User size={16} />
-          </NavItem>
-          <NavItem
-            active={active === "explore"}
-            onClick={() => nav("explore")}
-            label="Explore"
-          >
-            <Compass size={16} />
-          </NavItem>
-        </nav>
-
-        <div className="flex items-center justify-between px-5 py-2">
-          <span className="text-[10px] font-semibold uppercase text-muted-foreground">
-            Workspaces
-          </span>
-          <button
-            onClick={() => nav("create-workspace")}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <Plus size={14} />
-          </button>
-        </div>
-
-        <div
-          className="flex-1 overflow-y-auto px-2 pb-2
-                     [scrollbar-gutter:stable] 
-                     [scrollbar-width:thin]
-                     [scrollbar-color:rgba(148,163,184,0.15)_transparent]
-                     [&::-webkit-scrollbar]:w-1.5
-                     [&::-webkit-scrollbar-track]:bg-transparent
-                     [&::-webkit-scrollbar-track-piece]:bg-transparent
-                     [&::-webkit-scrollbar-corner]:bg-transparent
-                     [&::-webkit-scrollbar-button]:hidden
-                     [&::-webkit-scrollbar-thumb]:bg-muted-foreground/15
-                     [&::-webkit-scrollbar-thumb]:rounded-full"
-        >
-          {workspaces.length === 0 ? (
-            <button
-              onClick={() => nav("empty")}
-              className={`group flex w-full flex-col items-center gap-1 rounded-lg p-3 ${
-                active === "empty" ? "bg-accent" : "hover:bg-accent/50"
-              }`}
-            >
-              <Home size={16} className="text-muted-foreground" />
-              <span className="text-[11px] text-muted-foreground">
-                No workspace
-              </span>
-            </button>
-          ) : (
-            <div className="flex flex-col space-y-2">
-              {starred.length > 0 && (
-                <>
-                  <p className="px-3 text-[10px] text-muted-foreground">
-                    Starred
-                  </p>
-                  {starred.map(renderDraggableWorkspace)}
-                </>
-              )}
-
-              {regular.length > 0 && (
-                <>
-                  {starred.length > 0 && (
-                    <p className="px-3 text-[10px] text-muted-foreground">
-                      All
-                    </p>
-                  )}
-                  {regular.map(renderDraggableWorkspace)}
-                </>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className="border-t p-2">
-          <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-2 py-1.5">
-            <Avatar name="You" size="sm" />
-            <div className="flex-1">
-              <p className="text-xs font-medium">You</p>
-              <p className="text-[10px] text-muted-foreground">Online</p>
-            </div>
-            <ModeToggle />
-          </div>
-        </div>
+      {/* DESKTOP SIDEBAR */}
+      <aside className="hidden h-full w-56 flex-col border-r bg-background md:flex">
+        <SidebarContent
+          active={active}
+          onClose={onClose}
+          nav={nav}
+          workspaces={workspaces}
+          starred={starred}
+          regular={regular}
+          renderDraggableWorkspace={renderDraggableWorkspace}
+        />
       </aside>
 
       {optionsFor && optionsWorkspace && (
@@ -1180,7 +1243,6 @@ export default function Page() {
     []
   );
 
-  // ACTIONS with toasts: rename / delete / star
   const handleAction = useCallback(
     (action: string, id?: string) => {
       if (!id) return;
@@ -1225,7 +1287,6 @@ export default function Page() {
     [active]
   );
 
-  // ADD MEMBER with toast
   const handleAddMember = useCallback(
     (wsId: string, username: string) => {
       const ws = workspaces.find((w) => w.id === wsId);
@@ -1266,7 +1327,6 @@ export default function Page() {
     });
   }, []);
 
-  // Home behavior: first starred, else first workspace, else empty
   const handleHomeClick = useCallback(() => {
     if (workspaces.length === 0) {
       setActive("empty");
