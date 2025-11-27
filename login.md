@@ -1,25 +1,9 @@
-Here’s a complete, consistent set of files:
-
-- `lib/supabase/client.ts`
-- `lib/supabase/server.ts`
-- `app/page.tsx` (home)
-- `app/login/page.tsx` + `app/login/LoginForm.tsx`
-- `app/register/page.tsx` + `app/register/RegisterForm.tsx`
-- `app/dashboard/page.tsx` + `app/dashboard/LogoutButton.tsx`
-
-Assumptions:
-
-- App Router (`app/` directory)
-- Environment vars set:  
-  `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- shadcn/ui components exist in `@/components/ui/*`
-- Sonner `<Toaster />` is already added in `app/layout.tsx` (as in earlier answer)
-
-Adjust `@/...` paths if your structure is different.
+Keep your existing `lib/supabase/server.ts` exactly as you posted.  
+Below is everything else you asked for, adjusted to work with that async `createClient()`.
 
 ---
 
-## `lib/supabase/client.ts`
+## 1. `lib/supabase/client.ts`
 
 ```ts
 // lib/supabase/client.ts
@@ -28,7 +12,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 let client: SupabaseClient | null = null;
 
-export function createClient() {
+export function createClient(): SupabaseClient {
   if (!client) {
     client = createBrowserClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -42,16 +26,16 @@ export function createClient() {
 
 ---
 
-## `lib/supabase/server.ts`
+## 2. `lib/supabase/server.ts` (use exactly what you posted)
 
 ```ts
 // lib/supabase/server.ts
-import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { cookies } from 'next/headers';
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
 
-export function createClient(): SupabaseClient {
-  const cookieStore = cookies();
+export async function createClient() {
+  // In your Next version, cookies() returns a Promise
+  const cookieStore = await cookies();
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -61,15 +45,23 @@ export function createClient(): SupabaseClient {
         get(name: string) {
           return cookieStore.get(name)?.value;
         },
+        set(name: string, value: string, options: CookieOptions) {
+          cookieStore.set({ name, value, ...options });
+        },
+        remove(name: string, options: CookieOptions) {
+          cookieStore.set({ name, value: '', ...options });
+        },
       },
-    }
+    },
   );
 }
 ```
 
+Note: Because this `createClient` is `async`, every server component/page must `await createClient()`.
+
 ---
 
-## `app/page.tsx` (home)
+## 3. `app/page.tsx` (home)
 
 ```tsx
 // app/page.tsx
@@ -79,7 +71,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 
 export default async function HomePage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -116,7 +108,7 @@ export default async function HomePage() {
 
 ---
 
-## Login
+## 4. Login
 
 ### `app/login/page.tsx` (server)
 
@@ -127,7 +119,7 @@ import { createClient } from "@/lib/supabase/server";
 import LoginForm from "./LoginForm";
 
 export default async function LoginPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -293,7 +285,7 @@ export default function LoginForm() {
 
 ---
 
-## Register
+## 5. Register
 
 ### `app/register/page.tsx` (server)
 
@@ -304,7 +296,7 @@ import { createClient } from "@/lib/supabase/server";
 import RegisterForm from "./RegisterForm";
 
 export default async function RegisterPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -317,7 +309,7 @@ export default async function RegisterPage() {
 }
 ```
 
-### `app/register/RegisterForm.tsx` (client)
+### `app/register/RegisterForm.tsx` (client, 2-step)
 
 ```tsx
 // app/register/RegisterForm.tsx
@@ -591,7 +583,7 @@ export default function RegisterForm() {
 
 ---
 
-## Dashboard
+## 6. Dashboard
 
 ### `app/dashboard/page.tsx` (server)
 
@@ -609,7 +601,7 @@ import {
 } from "@/components/ui/card";
 
 export default async function DashboardPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -702,4 +694,5 @@ export default function LogoutButton() {
 }
 ```
 
-These files together give you a full minimal auth flow with Supabase, shadcn/ui, and Sonner. If you hit any specific TypeScript/runtime error, paste it and I’ll adjust exactly to your setup.
+All server-side uses of `createClient` now correctly `await` your async helper.  
+If you see any specific TS error, paste it with the file/line and I’ll fix it.
