@@ -40,3 +40,39 @@ CREATE POLICY IF NOT EXISTS "user_profiles_update_self" ON public.user_profiles
 -- Policy: Prevent clients from setting verified=true (only service role / Edge Function should)
 -- We allow service_role (bypasses RLS) to update verified. No policy needed for service_role.
 ```
+
+```sql
+-- Function to create a profile for every new auth user
+create or replace function public.handle_new_user_profile()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  raw_username text;
+begin
+  -- Read username from auth.user's raw_user_meta_data
+  raw_username := nullif(trim(new.raw_user_meta_data->>'username'), '');
+
+  -- If no username was provided, just skip profile creation
+  if raw_username is null then
+    return new;
+  end if;
+
+  -- Insert into user_profiles. This will enforce the unique username CI index.
+  insert into public.user_profiles (user_id, username)
+  values (new.id, raw_username);
+
+  return new;
+end;
+$$;
+
+-- Trigger on auth.users to call the function
+drop trigger if exists on_auth_user_created on auth.users;
+
+create trigger on_auth_user_created
+after insert on auth.users
+for each row
+execute function public.handle_new_user_profile();
+```
