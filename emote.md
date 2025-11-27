@@ -1,4 +1,4 @@
-json```
+```json
 [
   {
     "name": "Example Emote",
@@ -23,7 +23,7 @@ json```
 ]
 ```
 
-tsx```
+```tsx
 'use client';
 
 import { useState, useEffect } from 'react';
