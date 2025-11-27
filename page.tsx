@@ -18,9 +18,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   MessageCircle,
-  Globe,
-  Lightbulb,
-  Image,
+  Sticker, // ⬅️ replaced Globe, Lightbulb, Image with Sticker
   Copy,
   Check,
   User,
@@ -869,16 +867,15 @@ const ChatSection = memo(function ChatSection({
             className="max-h-[120px] min-h-[36px] w-full resize-none bg-transparent py-1 text-sm outline-none"
           />
           <div className="mt-1 flex items-center gap-1">
-            {[Globe, Lightbulb, Image].map((Icon, i) => (
-              <Button
-                key={i}
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-              >
-                <Icon size={16} />
-              </Button>
-            ))}
+            {/* Single Sticker button replacing Globe, Lightbulb, and Image */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+            >
+              <Sticker size={16} />
+            </Button>
+
             <Button
               size="icon"
               className="ml-auto h-8 w-8"
