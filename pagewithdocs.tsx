@@ -336,7 +336,7 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
     <div className="flex h-full flex-col items-center justify-center">
       <MessageCircle size={40} className="text-muted-foreground/40" />
       <h2 className="mt-4 font-semibold">No workspace yet</h2>
-      <p className="mt-1 text-sm text-muted-foreground">
+      <p className="mt-1 text-sm text-muted-foreground mx-auto text-center">
         Create your first workspace to start chatting.
       </p>
       <Button onClick={onCreate} className="mt-4 gap-2" size="sm">
