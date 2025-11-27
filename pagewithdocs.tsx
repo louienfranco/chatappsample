@@ -1005,6 +1005,11 @@ function SidebarContent({
   );
 }
 
+// Constants for options dropdown positioning (mobile-safe)
+const DROPDOWN_WIDTH = 128; // px, matches w-32
+const DROPDOWN_HEIGHT = 120; // approx height for 3 items
+const DROPDOWN_MARGIN = 8; // px from viewport edges
+
 // Sidebar (memoized) with drag-and-drop reordering
 interface SidebarProps {
   isOpen: boolean;
@@ -1056,16 +1061,40 @@ const Sidebar = memo(function Sidebar({
     [nav]
   );
 
+  // UPDATED: viewport-aware options dropdown positioning
   const handleWorkspaceOptions = useCallback(
     (e: ReactMouseEvent<HTMLButtonElement>, id: string) => {
       e.stopPropagation();
       const rect = e.currentTarget.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+
+      // Base position: to the right of the button
+      let top = rect.top;
+      let left = rect.right + DROPDOWN_MARGIN;
+
+      // Horizontal: if overflow on right, place to the left
+      if (left + DROPDOWN_WIDTH > vw - DROPDOWN_MARGIN) {
+        left = rect.left - DROPDOWN_WIDTH - DROPDOWN_MARGIN;
+      }
+
+      // Clamp horizontally inside viewport
+      if (left < DROPDOWN_MARGIN) left = DROPDOWN_MARGIN;
+
+      // Vertical: if overflow bottom, move up
+      if (top + DROPDOWN_HEIGHT > vh - DROPDOWN_MARGIN) {
+        top = vh - DROPDOWN_HEIGHT - DROPDOWN_MARGIN;
+      }
+
+      // Clamp vertically inside viewport
+      if (top < DROPDOWN_MARGIN) top = DROPDOWN_MARGIN;
+
       setOptionsFor((prev) =>
         prev?.id === id
           ? null
           : {
               id,
-              pos: { top: rect.top, left: rect.right + 8 },
+              pos: { top, left },
             }
       );
     },
