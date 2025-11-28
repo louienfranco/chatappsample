@@ -355,6 +355,7 @@ export default function RegisterForm() {
       email,
       password,
       options: {
+        // The DB trigger reads this as raw_user_meta_data->>'username'
         data: {
           username,
           display_name: displayName,
@@ -364,11 +365,30 @@ export default function RegisterForm() {
 
     if (error) {
       setLoading(false);
+
+      const msg = (error.message || "").toLowerCase();
+
+      // Email already used
+      if (msg.includes("already registered")) {
+        toast.error("This email is already registered. Please sign in instead.");
+        return;
+      }
+
+      // DB error from trigger (e.g. username uniqueness failure)
+      if (msg.includes("database error saving new user")) {
+        toast.error("That username is already taken. Please choose another one.");
+        return;
+      }
+
       toast.error(error.message || "Failed to register.");
       return;
     }
 
-    if (!data.user) {
+    const { user, session } = data;
+
+    // If email confirmations are enabled, you may have user but no session.
+    // The profile has already been created by the trigger if signup succeeded.
+    if (!user || !session) {
       setLoading(false);
       toast.success(
         "Registration succeeded. Please check your email to confirm your account."
@@ -376,6 +396,7 @@ export default function RegisterForm() {
       return;
     }
 
+    setLoading(false);
     toast.success("Registered successfully! You can now sign in.");
     router.push("/login");
     router.refresh();
@@ -411,7 +432,7 @@ export default function RegisterForm() {
             </CardTitle>
             <CardDescription className="text-[11px]">
               {step === 1
-                ? "Pick a username and a name. You can change these later."
+                ? "Pick a username and a name. Usernames are unique (case-insensitive)."
                 : "Use a valid email address and a secure password."}
             </CardDescription>
           </CardHeader>
@@ -433,6 +454,9 @@ export default function RegisterForm() {
                       required
                       className="h-9 text-sm"
                     />
+                    <p className="mt-0.5 text-[10px] text-muted-foreground">
+                      This will be your unique handle.
+                    </p>
                   </div>
 
                   <div className="space-y-1">
@@ -508,7 +532,6 @@ export default function RegisterForm() {
               <div className="grid grid-cols-2 gap-2 pt-2">
                 {step === 1 ? (
                   <>
-                    {/* left blank */}
                     <span />
                     <Button
                       type="button"
