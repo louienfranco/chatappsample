@@ -232,7 +232,10 @@ function WorkspaceItem({
   const { bg, text } = getWorkspaceColorClasses(ws.color);
 
   return (
-    <div className="group relative flex items-center gap-1">
+    <div
+      className="group relative flex items-center gap-1 select-none"
+      onContextMenu={(e) => e.preventDefault()}
+    >
       <span className="flex h-5 w-5 items-center justify-center text-muted-foreground/60 group-hover:text-muted-foreground">
         <GripVertical size={14} />
       </span>
@@ -1235,7 +1238,15 @@ const Sidebar = memo(function Sidebar({
         onDragOver={(e) => handleDragOver(e, ws.id)}
         onDrop={() => handleDrop(ws.id)}
         onDragEnd={handleDragEnd}
-        className="cursor-grab active:cursor-grabbing"
+        onContextMenu={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
+        className="cursor-grab active:cursor-grabbing select-none touch-pan-y"
+        style={{
+          WebkitTouchCallout: "none",
+          WebkitUserSelect: "none",
+        }}
       >
         <WorkspaceItem
           ws={ws}
