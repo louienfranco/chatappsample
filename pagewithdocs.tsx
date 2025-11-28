@@ -32,14 +32,16 @@ import {
   Shield,
   UserCog,
   ChevronRight,
+  ChevronDown,
   Palette,
   MoreHorizontal,
   Pencil,
   Trash2,
   Star,
   GripVertical,
-  UserSearch, // added
-  ArrowLeft, // added
+  UserSearch,
+  ArrowLeft,
+  LogOut, // used for leave + logout
 } from "lucide-react";
 
 import {
@@ -55,6 +57,7 @@ import Docs from "@/components/docs/Docs";
 // Types
 type Role = "user" | "bot";
 type SectionId = "profile" | "explore" | "empty" | "create-workspace" | string;
+type DialogType = "rename" | "delete" | "add-member" | "leave" | "logout";
 
 interface Message {
   id: string;
@@ -65,13 +68,14 @@ interface Message {
 
 interface Member {
   id: string;
-  name: string; // used as "@username" in UI
+  name: string; // used as "@username" in UI, or "You" for current user
   role: string;
   status: "online" | "offline";
 }
 
 interface Workspace {
   id: string;
+  code: string; // 6-char join code, A-Z0-9
   name: string;
   messages: Message[];
   starred?: boolean;
@@ -132,6 +136,16 @@ const uid = () =>
 
 const now = () =>
   new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+// generate 6-char uppercase alphanumeric code
+const generateWorkspaceCode = () => {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let result = "";
+  for (let i = 0; i < 6; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result.toUpperCase();
+};
 
 const getColor = (name?: string) => {
   const key = (name as ColorName) ?? "green";
@@ -351,7 +365,7 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
   );
 }
 
-// Create Workspace
+// Create Workspace (with Create + Join)
 function CreateWorkspace({
   onCreate,
   onCancel,
@@ -361,6 +375,7 @@ function CreateWorkspace({
 }) {
   const [name, setName] = useState("");
   const [color, setColor] = useState<ColorName>("green");
+  const [joinCode, setJoinCode] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -372,75 +387,124 @@ function CreateWorkspace({
     if (name.trim()) onCreate(name.trim(), color);
   };
 
+  const handleJoinSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    const code = joinCode.trim().toUpperCase();
+    if (!code) return;
+    toast.success("Successfully joined");
+    setJoinCode("");
+  };
+
   return (
     <div className="flex h-full items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <h1 className="text-xl font-semibold">Create Workspace</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Organize your conversations by project or topic.
-        </p>
+      <div className="w-full max-w-md space-y-8">
+        {/* CREATE WORKSPACE */}
+        <div>
+          <h1 className="text-xl font-semibold">Create Workspace</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Organize your conversations by project or topic.
+          </p>
 
-        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-          <div className="rounded-xl border bg-muted/40 p-4">
-            <p className="mb-2 text-xs text-muted-foreground">Preview</p>
-            <div className="flex items-center gap-3">
-              <div
-                className={`flex h-10 w-10 items-center justify-center rounded-lg text-lg font-bold text-white ${getColor(
-                  color
-                )}`}
-              >
-                {name.trim().charAt(0).toUpperCase() || "W"}
+          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+            <div className="rounded-xl border bg-muted/40 p-4">
+              <p className="mb-2 text-xs text-muted-foreground">Preview</p>
+              <div className="flex items-center gap-3">
+                <div
+                  className={`flex h-10 w-10 items-center justify-center rounded-lg text-lg font-bold text-white ${getColor(
+                    color
+                  )}`}
+                >
+                  {name.trim().charAt(0).toUpperCase() || "W"}
+                </div>
+                <div className="flex flex-col">
+                  <p className="font-medium">
+                    {name.trim() || "Workspace Name"}
+                  </p>
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">
+                    Workspace ID will be generated automatically
+                  </p>
+                </div>
               </div>
-              <p className="font-medium">{name.trim() || "Workspace Name"}</p>
             </div>
-          </div>
 
-          <div>
-            <label className="text-sm font-medium">
-              Name <span className="text-destructive">*</span>
-            </label>
+            <div>
+              <label className="text-sm font-medium">
+                Name <span className="text-destructive">*</span>
+              </label>
+              <input
+                ref={inputRef}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g., Project Alpha"
+                maxLength={50}
+                className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">Color</label>
+              <div className="mt-2 flex gap-2">
+                {COLORS.map((c) => (
+                  <button
+                    key={c.name}
+                    type="button"
+                    onClick={() => setColor(c.name)}
+                    className={`h-8 w-8 rounded-full ${c.bg} ${
+                      color === c.name
+                        ? "ring-2 ring-foreground ring-offset-2"
+                        : "hover:scale-110"
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onCancel}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={!name.trim()} className="flex-1">
+                Create
+              </Button>
+            </div>
+          </form>
+        </div>
+
+        {/* JOIN WORKSPACE */}
+        <div className="border-t pt-4">
+          <h2 className="text-sm font-semibold">Join Workspace</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Enter a workspace ID (e.g.,{" "}
+            <span className="font-mono">ABC123</span>) to join an existing one.
+          </p>
+          <form
+            onSubmit={handleJoinSubmit}
+            className="mt-3 flex items-center gap-2"
+          >
             <input
-              ref={inputRef}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., Project Alpha"
-              maxLength={50}
-              className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+              value={joinCode}
+              onChange={(e) =>
+                setJoinCode(e.target.value.toUpperCase().slice(0, 6))
+              }
+              placeholder="ABC123"
+              maxLength={6}
+              className="flex-1 rounded-lg border bg-background px-3 py-2 text-xs font-mono uppercase tracking-widest outline-none focus:border-primary"
             />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium">Color</label>
-            <div className="mt-2 flex gap-2">
-              {COLORS.map((c) => (
-                <button
-                  key={c.name}
-                  type="button"
-                  onClick={() => setColor(c.name)}
-                  className={`h-8 w-8 rounded-full ${c.bg} ${
-                    color === c.name
-                      ? "ring-2 ring-foreground ring-offset-2"
-                      : "hover:scale-110"
-                  }`}
-                />
-              ))}
-            </div>
-          </div>
-
-          <div className="flex gap-3 pt-2">
             <Button
-              type="button"
+              type="submit"
               variant="outline"
-              onClick={onCancel}
-              className="flex-1"
+              size="sm"
+              disabled={!joinCode.trim()}
             >
-              Cancel
+              Join
             </Button>
-            <Button type="submit" disabled={!name.trim()} className="flex-1">
-              Create
-            </Button>
-          </div>
-        </form>
+          </form>
+        </div>
       </div>
     </div>
   );
@@ -534,6 +598,81 @@ function DeleteDialog({
   );
 }
 
+// Leave Workspace Dialog
+function LeaveDialog({
+  ws,
+  onConfirm,
+  onClose,
+}: {
+  ws: Workspace;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-xs rounded-xl border bg-background p-4">
+        <h2 className="font-semibold">Leave Workspace</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Are you sure you want to leave &quot;{ws.name}&quot;? You will lose
+          access to its messages.
+        </p>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            onClick={() => {
+              onConfirm();
+              onClose();
+            }}
+          >
+            Leave
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Logout Dialog (same design style as LeaveDialog)
+function LogoutDialog({
+  onConfirm,
+  onClose,
+}: {
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-xs rounded-xl border bg-background p-4">
+        <h2 className="font-semibold">Log out</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Are you sure you want to log out? You can sign back in at any time.
+        </p>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            onClick={() => {
+              onConfirm();
+              onClose();
+            }}
+          >
+            Log out
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Add Member Dialog
 function AddMemberDialog({
   ws,
@@ -610,8 +749,12 @@ function AddMemberDialog({
   );
 }
 
-// Profile Section
-function ProfileSection() {
+// Profile Section (with Logout button that uses dialog)
+function ProfileSection({
+  onRequestLogout,
+}: {
+  onRequestLogout: () => void;
+}) {
   const settings = [
     { icon: Palette, label: "Appearance", desc: "Theme & display" },
     { icon: Bell, label: "Notifications", desc: "Alerts & sounds" },
@@ -619,8 +762,24 @@ function ProfileSection() {
     { icon: UserCog, label: "Account", desc: "Email & password" },
   ];
 
+  const handleLogoutClick = () => {
+    onRequestLogout();
+  };
+
   return (
-    <div className="h-full overflow-y-auto p-4">
+    <div
+      className="h-full overflow-y-auto p-4
+                 [scrollbar-gutter:stable]
+                 [scrollbar-width:thin]
+                 [scrollbar-color:rgba(148,163,184,0.15)_transparent]
+                 [&::-webkit-scrollbar]:w-1.5
+                 [&::-webkit-scrollbar-track]:bg-transparent
+                 [&::-webkit-scrollbar-track-piece]:bg-transparent
+                 [&::-webkit-scrollbar-corner]:bg-transparent
+                 [&::-webkit-scrollbar-button]:hidden
+                 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/15
+                 [&::-webkit-scrollbar-thumb]:rounded-full"
+    >
       <div className="mx-auto max-w-2xl">
         <div className="overflow-hidden rounded-2xl border bg-card">
           <div className="h-16 bg-gradient-to-r from-violet-500 via-purple-500 to-fuchsia-500" />
@@ -652,6 +811,16 @@ function ProfileSection() {
             </button>
           ))}
         </div>
+
+        <Button
+          type="button"
+          onClick={handleLogoutClick}
+          variant="outline"
+          className="mt-6 flex w-full items-center justify-center gap-2 border-destructive/40 text-destructive hover:bg-destructive/10"
+        >
+          <LogOut size={14} />
+          <span className="text-xs font-medium">Log out</span>
+        </Button>
       </div>
     </div>
   );
@@ -661,14 +830,20 @@ function ProfileSection() {
 function MembersPanel({
   ws,
   onRequestAddMember,
+  onRequestLeaveWorkspace,
 }: {
   ws: Workspace;
   onRequestAddMember: (wsId: string) => void;
+  onRequestLeaveWorkspace: (wsId: string) => void;
 }) {
   const members = ws.members ?? [];
 
   const handleAddClick = () => {
     onRequestAddMember(ws.id);
+  };
+
+  const handleLeaveClick = () => {
+    onRequestLeaveWorkspace(ws.id);
   };
 
   return (
@@ -690,26 +865,55 @@ function MembersPanel({
           </button>
         </div>
       </div>
-      <div className="space-y-2">
-        {members.map((m) => (
-          <div
-            key={m.id}
-            className="flex items-center gap-2 rounded-lg bg-muted/40 px-2 py-1.5"
-          >
-            <Avatar name={m.name} size="sm" />
-            <div className="flex-1">
-              <p className="text-xs font-medium">{m.name}</p>
-              <p className="text-[10px] text-muted-foreground">{m.role}</p>
+      <div
+        className="flex-1 space-y-2 overflow-y-auto
+                   [scrollbar-gutter:stable]
+                   [scrollbar-width:thin]
+                   [scrollbar-color:rgba(148,163,184,0.15)_transparent]
+                   [&::-webkit-scrollbar]:w-1.5
+                   [&::-webkit-scrollbar-track]:bg-transparent
+                   [&::-webkit-scrollbar-track-piece]:bg-transparent
+                   [&::-webkit-scrollbar-corner]:bg-transparent
+                   [&::-webkit-scrollbar-button]:hidden
+                   [&::-webkit-scrollbar-thumb]:bg-muted-foreground/15
+                   [&::-webkit-scrollbar-thumb]:rounded-full"
+      >
+        {members.map((m) => {
+          const isCurrentUser = m.name === "You";
+
+          return (
+            <div
+              key={m.id}
+              className="flex items-center gap-2 rounded-lg bg-muted/40 px-2 py-1.5"
+            >
+              <Avatar name={m.name} size="sm" />
+              <div className="flex-1">
+                <p className="text-xs font-medium">{m.name}</p>
+                <p className="text-[10px] text-muted-foreground">{m.role}</p>
+              </div>
+              <div className="flex items-center gap-1">
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    m.status === "online"
+                      ? "bg-green-500"
+                      : "bg-muted-foreground/40"
+                  }`}
+                />
+                {isCurrentUser && (
+                  <button
+                    type="button"
+                    onClick={handleLeaveClick}
+                    className="flex h-5 w-5 items-center justify-center rounded-full text-red-500 hover:bg-red-500/10"
+                    aria-label="Leave workspace"
+                    title="Leave workspace"
+                  >
+                    <LogOut size={10} />
+                  </button>
+                )}
+              </div>
             </div>
-            <span
-              className={`h-1.5 w-1.5 rounded-full ${
-                m.status === "online"
-                  ? "bg-green-500"
-                  : "bg-muted-foreground/40"
-              }`}
-            />
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -720,15 +924,21 @@ function MembersMainSection({
   ws,
   onBack,
   onRequestAddMember,
+  onRequestLeaveWorkspace,
 }: {
   ws: Workspace;
   onBack: () => void;
   onRequestAddMember: (wsId: string) => void;
+  onRequestLeaveWorkspace: (wsId: string) => void;
 }) {
   const members = ws.members ?? [];
 
   const handleAddClick = () => {
     onRequestAddMember(ws.id);
+  };
+
+  const handleLeaveClick = () => {
+    onRequestLeaveWorkspace(ws.id);
   };
 
   return (
@@ -751,7 +961,19 @@ function MembersMainSection({
       </div>
 
       {/* Members content */}
-      <div className="flex-1 overflow-y-auto p-3">
+      <div
+        className="flex-1 overflow-y-auto p-3
+                   [scrollbar-gutter:stable]
+                   [scrollbar-width:thin]
+                   [scrollbar-color:rgba(148,163,184,0.15)_transparent]
+                   [&::-webkit-scrollbar]:w-1.5
+                   [&::-webkit-scrollbar-track]:bg-transparent
+                   [&::-webkit-scrollbar-track-piece]:bg-transparent
+                   [&::-webkit-scrollbar-corner]:bg-transparent
+                   [&::-webkit-scrollbar-button]:hidden
+                   [&::-webkit-scrollbar-thumb]:bg-muted-foreground/15
+                   [&::-webkit-scrollbar-thumb]:rounded-full"
+      >
         <div className="mx-auto w-full max-w-lg">
           <div className="mb-3 flex items-center justify-between">
             <span className="text-xs font-semibold uppercase text-muted-foreground">
@@ -773,27 +995,44 @@ function MembersMainSection({
           </div>
 
           <div className="space-y-2">
-            {members.map((m) => (
-              <div
-                key={m.id}
-                className="flex items-center gap-2 rounded-lg bg-muted/40 px-2 py-1.5"
-              >
-                <Avatar name={m.name} size="sm" />
-                <div className="flex-1">
-                  <p className="text-xs font-medium">{m.name}</p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {m.role}
-                  </p>
+            {members.map((m) => {
+              const isCurrentUser = m.name === "You";
+
+              return (
+                <div
+                  key={m.id}
+                  className="flex items-center gap-2 rounded-lg bg-muted/40 px-2 py-1.5"
+                >
+                  <Avatar name={m.name} size="sm" />
+                  <div className="flex-1">
+                    <p className="text-xs font-medium">{m.name}</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {m.role}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span
+                      className={`h-1.5 w-1.5 rounded-full ${
+                        m.status === "online"
+                          ? "bg-green-500"
+                          : "bg-muted-foreground/40"
+                      }`}
+                    />
+                    {isCurrentUser && (
+                      <button
+                        type="button"
+                        onClick={handleLeaveClick}
+                        className="flex h-5 w-5 items-center justify-center rounded-full text-red-500 hover:bg-red-500/10"
+                        aria-label="Leave workspace"
+                        title="Leave workspace"
+                      >
+                        <LogOut size={10} />
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <span
-                  className={`h-1.5 w-1.5 rounded-full ${
-                    m.status === "online"
-                      ? "bg-green-500"
-                      : "bg-muted-foreground/40"
-                  }`}
-                />
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
@@ -801,7 +1040,7 @@ function MembersMainSection({
   );
 }
 
-// Chat Section
+// Chat Section (keep NO visible scrollbar for messages)
 interface ChatSectionProps {
   ws: Workspace;
   onAddMessage: (id: string, role: Role, text: string) => void;
@@ -861,7 +1100,16 @@ const ChatSection = memo(function ChatSection({
       <div
         className={`flex ${HEADER_HEIGHT} items-center justify-between border-b px-4`}
       >
-        <span className="text-sm font-semibold"># {ws.name.toLowerCase()}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-foreground">
+            # {ws.name.toLowerCase()}
+          </span>
+          {ws.code && (
+            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-mono font-semibold uppercase tracking-widest text-foreground">
+              {ws.code}
+            </span>
+          )}
+        </div>
         <span className="flex items-center gap-1.5 text-xs text-green-600">
           <span className="h-1.5 w-1.5 rounded-full bg-green-500" /> Online
           {onShowMembers && (
@@ -877,7 +1125,7 @@ const ChatSection = memo(function ChatSection({
         </span>
       </div>
 
-      {/* Messages area */}
+      {/* Messages area (no visible scroll bar) */}
       <div className="flex-1 overflow-hidden">
         <div
           ref={chatRef}
@@ -1327,8 +1575,9 @@ export default function Page() {
   const [active, setActive] = useState<SectionId>("empty");
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [mobileTopNavOpen, setMobileTopNavOpen] = useState(false);
   const [dialog, setDialog] = useState<{
-    type: "rename" | "delete" | "add-member";
+    type: DialogType;
     id: string;
   } | null>(null);
 
@@ -1337,7 +1586,10 @@ export default function Page() {
 
   useEffect(() => {
     const onResize = () => {
-      if (window.innerWidth >= DESKTOP_BP) setSidebarOpen(false);
+      if (window.innerWidth >= DESKTOP_BP) {
+        setSidebarOpen(false);
+        setMobileTopNavOpen(false);
+      }
     };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
@@ -1346,6 +1598,7 @@ export default function Page() {
   const handleCreate = useCallback((name: string, color: string) => {
     const ws: Workspace = {
       id: uid(),
+      code: generateWorkspaceCode(), // 6-char uppercase code
       name,
       messages: [],
       color,
@@ -1467,6 +1720,32 @@ export default function Page() {
     });
   }, []);
 
+  const handleLeaveWorkspace = useCallback(
+    (wsId: string) => {
+      const ws = workspaces.find((w) => w.id === wsId);
+      if (!ws) return;
+
+      const next = workspaces.filter((w) => w.id !== wsId);
+      setWorkspaces(next);
+
+      // If we were viewing this workspace, switch to another or empty
+      if (active === wsId) {
+        if (next.length === 0) {
+          setActive("empty");
+        } else {
+          const firstStarred = next.find((w) => w.starred);
+          setActive(firstStarred ? firstStarred.id : next[0].id);
+        }
+      }
+
+      // If members view was open for this workspace, close it
+      setMembersViewFor((cur) => (cur === wsId ? null : cur));
+
+      toast.success(`You left "${ws.name}"`);
+    },
+    [workspaces, active]
+  );
+
   const handleHomeClick = useCallback(() => {
     if (workspaces.length === 0) {
       setActive("empty");
@@ -1495,6 +1774,35 @@ export default function Page() {
 
   const dialogWs = dialog ? workspaces.find((ws) => ws.id === dialog.id) : null;
 
+  const currentTopLabel = active === "docs" ? "Docs" : "Home";
+
+  const topNavItems = [
+    {
+      key: "Home",
+      active: homeActive,
+      onClick: () => {
+        handleHomeClick();
+        setMobileTopNavOpen(false);
+      },
+    },
+    {
+      key: "Docs",
+      active: active === "docs",
+      onClick: () => {
+        setActive("docs");
+        setMobileTopNavOpen(false);
+      },
+    },
+    {
+      key: "Support",
+      active: false,
+      onClick: () => {
+        // Placeholder for support; just close dropdown
+        setMobileTopNavOpen(false);
+      },
+    },
+  ];
+
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground">
       <Sidebar
@@ -1509,7 +1817,7 @@ export default function Page() {
 
       <div className="flex h-full flex-1 flex-col overflow-hidden">
         <header
-          className={`flex ${HEADER_HEIGHT} items-center justify-between border-b px-3`}
+          className={`relative flex ${HEADER_HEIGHT} items-center justify-between border-b px-3`}
         >
           <div className="flex items-center gap-2">
             <button
@@ -1518,12 +1826,51 @@ export default function Page() {
             >
               <Menu size={18} />
             </button>
+
+            {/* Branding (mobile) */}
             <div className="flex items-center gap-1.5 md:hidden">
               <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary text-[10px] font-bold text-primary-foreground">
                 q
               </div>
               <span className="text-sm font-semibold">qPal</span>
             </div>
+
+            {/* Top nav dropdown (mobile) */}
+            <div className="relative md:hidden">
+              <button
+                type="button"
+                onClick={() => setMobileTopNavOpen((v) => !v)}
+                className="flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent"
+              >
+                <span>{currentTopLabel}</span>
+                <ChevronDown
+                  size={12}
+                  className={`transition-transform ${
+                    mobileTopNavOpen ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+              {mobileTopNavOpen && (
+                <div className="absolute left-0 top-8 z-40 w-32 rounded-md border bg-popover py-1 text-[11px] shadow-md">
+                  {topNavItems.map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={item.onClick}
+                      className={`flex w-full items-center justify-between px-2 py-1.5 text-left ${
+                        item.active
+                          ? "bg-accent text-foreground"
+                          : "text-muted-foreground hover:bg-accent/70 hover:text-foreground"
+                      }`}
+                    >
+                      <span>{item.key}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Top nav (desktop) */}
             <div className="hidden gap-1 text-[11px] text-muted-foreground md:flex">
               {["Home", "Docs", "Support"].map((item) => (
                 <button
@@ -1547,6 +1894,7 @@ export default function Page() {
               ))}
             </div>
           </div>
+
           <div className="flex items-center gap-2">
             <span className="hidden text-[11px] text-muted-foreground sm:inline">
               Signed in as{" "}
@@ -1559,10 +1907,28 @@ export default function Page() {
         </header>
 
         <main className="flex-1 overflow-hidden">
-          {active === "profile" && <ProfileSection />}
+          {active === "profile" && (
+            <ProfileSection
+              onRequestLogout={() =>
+                setDialog({ type: "logout", id: "logout" })
+              }
+            />
+          )}
 
           {active === "explore" && (
-            <div className="h-full overflow-y-auto p-4">
+            <div
+              className="h-full overflow-y-auto p-4
+                         [scrollbar-gutter:stable]
+                         [scrollbar-width:thin]
+                         [scrollbar-color:rgba(148,163,184,0.15)_transparent]
+                         [&::-webkit-scrollbar]:w-1.5
+                         [&::-webkit-scrollbar-track]:bg-transparent
+                         [&::-webkit-scrollbar-track-piece]:bg-transparent
+                         [&::-webkit-scrollbar-corner]:bg-transparent
+                         [&::-webkit-scrollbar-button]:hidden
+                         [&::-webkit-scrollbar-thumb]:bg-muted-foreground/15
+                         [&::-webkit-scrollbar-thumb]:rounded-full"
+            >
               <div className="mx-auto max-w-2xl">
                 <h1 className="font-semibold">Explore</h1>
                 <p className="mt-1 text-sm text-muted-foreground">
@@ -1594,7 +1960,23 @@ export default function Page() {
             />
           )}
 
-          {active === "docs" && <Docs />}
+          {active === "docs" && (
+            <div
+              className="h-full overflow-y-auto p-4
+                         [scrollbar-gutter:stable]
+                         [scrollbar-width:thin]
+                         [scrollbar-color:rgba(148,163,184,0.15)_transparent]
+                         [&::-webkit-scrollbar]:w-1.5
+                         [&::-webkit-scrollbar-track]:bg-transparent
+                         [&::-webkit-scrollbar-track-piece]:bg-transparent
+                         [&::-webkit-scrollbar-corner]:bg-transparent
+                         [&::-webkit-scrollbar-button]:hidden
+                         [&::-webkit-scrollbar-thumb]:bg-muted-foreground/15
+                         [&::-webkit-scrollbar-thumb]:rounded-full"
+            >
+              <Docs />
+            </div>
+          )}
 
           {showEmpty && (
             <EmptyState onCreate={() => setActive("create-workspace")} />
@@ -1610,6 +1992,9 @@ export default function Page() {
                     onRequestAddMember={(id) =>
                       setDialog({ type: "add-member", id })
                     }
+                    onRequestLeaveWorkspace={(id) =>
+                      setDialog({ type: "leave", id })
+                    }
                   />
                 ) : (
                   <ChatSection
@@ -1624,6 +2009,9 @@ export default function Page() {
                 ws={activeWs}
                 onRequestAddMember={(id) =>
                   setDialog({ type: "add-member", id })
+                }
+                onRequestLeaveWorkspace={(id) =>
+                  setDialog({ type: "leave", id })
                 }
               />
             </div>
@@ -1652,6 +2040,21 @@ export default function Page() {
         <AddMemberDialog
           ws={dialogWs}
           onAdd={(username) => handleAddMember(dialogWs.id, username)}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog?.type === "leave" && dialogWs && (
+        <LeaveDialog
+          ws={dialogWs}
+          onConfirm={() => handleLeaveWorkspace(dialogWs.id)}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog?.type === "logout" && (
+        <LogoutDialog
+          onConfirm={() => {
+            toast.success("Logged out");
+          }}
           onClose={() => setDialog(null)}
         />
       )}
