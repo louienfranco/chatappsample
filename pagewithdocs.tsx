@@ -38,6 +38,8 @@ import {
   Trash2,
   Star,
   GripVertical,
+  UserSearch, // added
+  ArrowLeft, // added
 } from "lucide-react";
 
 import {
@@ -652,7 +654,7 @@ function ProfileSection() {
   );
 }
 
-// Members Panel
+// Members Panel (sidebar on lg+)
 function MembersPanel({
   ws,
   onRequestAddMember,
@@ -710,15 +712,103 @@ function MembersPanel({
   );
 }
 
+// Full-width Members view (replaces chat on small screens)
+function MembersMainSection({
+  ws,
+  onBack,
+  onRequestAddMember,
+}: {
+  ws: Workspace;
+  onBack: () => void;
+  onRequestAddMember: (wsId: string) => void;
+}) {
+  const members = ws.members ?? [];
+
+  const handleAddClick = () => {
+    onRequestAddMember(ws.id);
+  };
+
+  return (
+    <div className="flex h-full flex-col">
+      {/* Top bar */}
+      <div
+        className={`flex ${HEADER_HEIGHT} items-center justify-between border-b px-4`}
+      >
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onBack}
+            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent"
+            aria-label="Back to chat"
+          >
+            <ArrowLeft size={16} />
+          </button>
+          <span className="text-sm font-semibold">Members · {ws.name}</span>
+        </div>
+      </div>
+
+      {/* Members content */}
+      <div className="flex-1 overflow-y-auto p-3">
+        <div className="mx-auto w-full max-w-lg">
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase text-muted-foreground">
+              Members
+            </span>
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-muted-foreground">
+                {members.length}
+              </span>
+              <button
+                type="button"
+                onClick={handleAddClick}
+                className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:bg-accent"
+                aria-label="Add member"
+              >
+                <Plus size={10} />
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            {members.map((m) => (
+              <div
+                key={m.id}
+                className="flex items-center gap-2 rounded-lg bg-muted/40 px-2 py-1.5"
+              >
+                <Avatar name={m.name} size="sm" />
+                <div className="flex-1">
+                  <p className="text-xs font-medium">{m.name}</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {m.role}
+                  </p>
+                </div>
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    m.status === "online"
+                      ? "bg-green-500"
+                      : "bg-muted-foreground/40"
+                  }`}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Chat Section
 interface ChatSectionProps {
   ws: Workspace;
   onAddMessage: (id: string, role: Role, text: string) => void;
+  onShowMembers?: () => void;
 }
 
 const ChatSection = memo(function ChatSection({
   ws,
   onAddMessage,
+  onShowMembers,
 }: ChatSectionProps) {
   const [input, setInput] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -771,6 +861,16 @@ const ChatSection = memo(function ChatSection({
         <span className="text-sm font-semibold"># {ws.name.toLowerCase()}</span>
         <span className="flex items-center gap-1.5 text-xs text-green-600">
           <span className="h-1.5 w-1.5 rounded-full bg-green-500" /> Online
+          {onShowMembers && (
+            <button
+              type="button"
+              onClick={onShowMembers}
+              className="ml-1 flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent lg:hidden"
+              aria-label="View members"
+            >
+              <UserSearch size={14} />
+            </button>
+          )}
         </span>
       </div>
 
@@ -1061,7 +1161,7 @@ const Sidebar = memo(function Sidebar({
     [nav]
   );
 
-  // UPDATED: viewport-aware options dropdown positioning
+  // viewport-aware options dropdown positioning
   const handleWorkspaceOptions = useCallback(
     (e: ReactMouseEvent<HTMLButtonElement>, id: string) => {
       e.stopPropagation();
@@ -1069,24 +1169,19 @@ const Sidebar = memo(function Sidebar({
       const vw = window.innerWidth;
       const vh = window.innerHeight;
 
-      // Base position: to the right of the button
       let top = rect.top;
       let left = rect.right + DROPDOWN_MARGIN;
 
-      // Horizontal: if overflow on right, place to the left
       if (left + DROPDOWN_WIDTH > vw - DROPDOWN_MARGIN) {
         left = rect.left - DROPDOWN_WIDTH - DROPDOWN_MARGIN;
       }
 
-      // Clamp horizontally inside viewport
       if (left < DROPDOWN_MARGIN) left = DROPDOWN_MARGIN;
 
-      // Vertical: if overflow bottom, move up
       if (top + DROPDOWN_HEIGHT > vh - DROPDOWN_MARGIN) {
         top = vh - DROPDOWN_HEIGHT - DROPDOWN_MARGIN;
       }
 
-      // Clamp vertically inside viewport
       if (top < DROPDOWN_MARGIN) top = DROPDOWN_MARGIN;
 
       setOptionsFor((prev) =>
@@ -1226,6 +1321,9 @@ export default function Page() {
     id: string;
   } | null>(null);
 
+  // which workspace is currently showing members in the main area
+  const [membersViewFor, setMembersViewFor] = useState<string | null>(null);
+
   useEffect(() => {
     const onResize = () => {
       if (window.innerWidth >= DESKTOP_BP) setSidebarOpen(false);
@@ -1312,6 +1410,8 @@ export default function Page() {
     (id: string) => {
       setWorkspaces((p) => p.filter((ws) => ws.id !== id));
       if (active === id) setActive("empty");
+      // if we were viewing members for this workspace, clear it
+      setMembersViewFor((cur) => (cur === id ? null : cur));
     },
     [active]
   );
@@ -1492,7 +1592,21 @@ export default function Page() {
           {activeWs && (
             <div className="flex h-full">
               <div className="min-w-0 flex-1">
-                <ChatSection ws={activeWs} onAddMessage={handleAddMessage} />
+                {membersViewFor === activeWs.id ? (
+                  <MembersMainSection
+                    ws={activeWs}
+                    onBack={() => setMembersViewFor(null)}
+                    onRequestAddMember={(id) =>
+                      setDialog({ type: "add-member", id })
+                    }
+                  />
+                ) : (
+                  <ChatSection
+                    ws={activeWs}
+                    onAddMessage={handleAddMessage}
+                    onShowMembers={() => setMembersViewFor(activeWs.id)}
+                  />
+                )}
               </div>
 
               <MembersPanel
