@@ -18,7 +18,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   MessageCircle,
-  Sticker, // using Sticker instead of Globe / Lightbulb / Image
+  Sticker,
   Copy,
   Check,
   User,
@@ -31,7 +31,6 @@ import {
   Bell,
   Shield,
   UserCog,
-  ChevronRight,
   ChevronDown,
   Palette,
   MoreHorizontal,
@@ -41,7 +40,7 @@ import {
   GripVertical,
   UserSearch,
   ArrowLeft,
-  LogOut, // used for leave + logout
+  LogOut,
 } from "lucide-react";
 
 import {
@@ -54,10 +53,19 @@ import { ModeToggle } from "@/components/theme/mode-toggle";
 import MDFormatting from "@/components/chat/MDFormatting";
 import Docs from "@/components/docs/Docs";
 
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+} from "@/components/ui/select";
+
 // Types
 type Role = "user" | "bot";
 type SectionId = "profile" | "explore" | "empty" | "create-workspace" | string;
 type DialogType = "rename" | "delete" | "add-member" | "leave" | "logout";
+type PresenceStatus = "online" | "busy" | "dnd";
 
 interface Message {
   id: string;
@@ -68,14 +76,14 @@ interface Message {
 
 interface Member {
   id: string;
-  name: string; // used as "@username" in UI, or "You" for current user
+  name: string;
   role: string;
   status: "online" | "offline";
 }
 
 interface Workspace {
   id: string;
-  code: string; // 6-char join code, A-Z0-9
+  code: string;
   name: string;
   messages: Message[];
   starred?: boolean;
@@ -137,7 +145,6 @@ const uid = () =>
 const now = () =>
   new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-// generate 6-char uppercase alphanumeric code
 const generateWorkspaceCode = () => {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
   let result = "";
@@ -229,7 +236,7 @@ function NavItem({
   );
 }
 
-// Workspace Item (with GripVertical icon)
+// Workspace Item
 function WorkspaceItem({
   ws,
   active,
@@ -365,7 +372,7 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
   );
 }
 
-// Create Workspace (with Create + Join)
+// Create Workspace
 function CreateWorkspace({
   onCreate,
   onCancel,
@@ -637,7 +644,7 @@ function LeaveDialog({
   );
 }
 
-// Logout Dialog (same design style as LeaveDialog)
+// Logout Dialog
 function LogoutDialog({
   onConfirm,
   onClose,
@@ -749,18 +756,66 @@ function AddMemberDialog({
   );
 }
 
-// Profile Section (with Logout button that uses dialog)
+// Profile Section with shadcn Select + "Soon" badges + extra bottom spacing
 function ProfileSection({
   onRequestLogout,
 }: {
   onRequestLogout: () => void;
 }) {
+  const [status, setStatus] = useState<PresenceStatus>("online");
+
   const settings = [
-    { icon: Palette, label: "Appearance", desc: "Theme & display" },
-    { icon: Bell, label: "Notifications", desc: "Alerts & sounds" },
-    { icon: Shield, label: "Privacy", desc: "Security & data" },
-    { icon: UserCog, label: "Account", desc: "Email & password" },
+    {
+      icon: UserCog,
+      label: "Account",
+      desc: "Basic account information",
+    },
+    {
+      icon: Shield,
+      label: "Security",
+      desc: "Password & 2‑factor authentication",
+    },
+    {
+      icon: Bell,
+      label: "Notifications",
+      desc: "Email & in‑app alerts",
+    },
+    {
+      icon: Palette,
+      label: "Appearance",
+      desc: "Theme & display preferences",
+    },
   ];
+
+  const statusLabelMap: Record<PresenceStatus, string> = {
+    online: "Online",
+    busy: "Busy",
+    dnd: "DND",
+  };
+
+  const statusStyles: Record<
+    PresenceStatus,
+    { dot: string; bg: string; text: string }
+  > = {
+    online: {
+      dot: "bg-emerald-500",
+      bg: "bg-emerald-500/10",
+      text: "text-emerald-600",
+    },
+    busy: {
+      dot: "bg-amber-500",
+      bg: "bg-amber-500/10",
+      text: "text-amber-600",
+    },
+    dnd: {
+      dot: "bg-red-500",
+      bg: "bg-red-500/10",
+      text: "text-red-600",
+    },
+  };
+
+  const currentStatusLabel = statusLabelMap[status];
+  const currentStatusStyle = statusStyles[status];
 
   const handleLogoutClick = () => {
     onRequestLogout();
@@ -768,7 +823,7 @@ function ProfileSection({
 
   return (
     <div
-      className="h-full overflow-y-auto p-4
+      className="h-full overflow-y-auto bg-muted/30 p-4 md:p-6
                  [scrollbar-gutter:stable]
                  [scrollbar-width:thin]
                  [scrollbar-color:rgba(148,163,184,0.15)_transparent]
@@ -780,47 +835,174 @@ function ProfileSection({
                  [&::-webkit-scrollbar-thumb]:bg-muted-foreground/15
                  [&::-webkit-scrollbar-thumb]:rounded-full"
     >
-      <div className="mx-auto max-w-2xl">
-        <div className="overflow-hidden rounded-2xl border bg-card">
-          <div className="h-16 bg-gradient-to-r from-violet-500 via-purple-500 to-fuchsia-500" />
-          <div className="relative px-4 pb-4">
-            <div className="absolute -top-7 left-4 rounded-xl border-4 border-card">
-              <Avatar name="You" size="lg" />
+      {/* pb-10 so content never touches the bottom */}
+      <div className="mx-auto flex h-full w-full max-w-5xl flex-col gap-5 pb-10 lg:flex-row lg:gap-6">
+        {/* LEFT COLUMN – profile summary */}
+        <div className="w-full max-w-md space-y-4 mx-auto lg:max-w-sm lg:mx-0 lg:shrink-0">
+          <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+            <div className="h-20 bg-gradient-to-r from-violet-500 via-purple-500 to-fuchsia-500" />
+            <div className="relative px-4 pb-4">
+              <div className="absolute -top-10 left-4 rounded-2xl border-4 border-card bg-card">
+                <Avatar name="You" size="lg" />
+              </div>
+
+              <div className="pt-10">
+                <h1 className="text-base font-semibold">You</h1>
+                <p className="text-sm text-muted-foreground">
+                  you@example.com
+                </p>
+                <p
+                  className={[
+                    "mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5",
+                    "text-[10px] font-medium",
+                    currentStatusStyle.bg,
+                    currentStatusStyle.text,
+                  ].join(" ")}
+                >
+                  <span
+                    className={[
+                      "h-1.5 w-1.5 rounded-full",
+                      currentStatusStyle.dot,
+                    ].join(" ")}
+                  />
+                  {currentStatusLabel}
+                </p>
+              </div>
             </div>
-            <div className="pt-10">
-              <h1 className="text-lg font-semibold">You</h1>
-              <p className="text-sm text-muted-foreground">you@example.com</p>
-            </div>
+          </div>
+
+          <div className="rounded-2xl border bg-card p-4 text-sm shadow-sm">
+            <h2 className="text-xs font-semibold uppercase text-muted-foreground">
+              Account overview
+            </h2>
+            <dl className="mt-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <dt className="text-xs text-muted-foreground">Display name</dt>
+                <dd className="text-xs font-medium text-foreground">You</dd>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <dt className="text-xs text-muted-foreground">Status</dt>
+                <dd className="text-xs font-medium text-foreground">
+                  {currentStatusLabel}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <dt className="text-xs text-muted-foreground">
+                  Workspaces joined
+                </dt>
+                <dd className="text-xs font-medium text-foreground">—</dd>
+              </div>
+            </dl>
+          </div>
+
+          <div className="rounded-2xl border border-destructive/40 bg-destructive/5 p-4 shadow-sm">
+            <h2 className="text-xs font-semibold uppercase text-destructive">
+              Danger zone
+            </h2>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Logging out will sign you out of qPal on this device.
+            </p>
+            <Button
+              type="button"
+              onClick={handleLogoutClick}
+              variant="outline"
+              className="mt-3 flex w-full items-center justify-center gap-2 border-destructive/50 text-destructive hover:bg-destructive/10"
+            >
+              <LogOut size={14} />
+              <span className="text-xs font-semibold">Log out</span>
+            </Button>
           </div>
         </div>
 
-        <div className="mt-6 space-y-2">
-          {settings.map((s) => (
-            <button
-              key={s.label}
-              className="group flex w-full items-center gap-3 rounded-xl border bg-muted/40 p-3 hover:bg-accent/50"
-            >
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                <s.icon size={18} />
-              </div>
-              <div className="flex-1 text-left">
-                <p className="text-sm font-medium">{s.label}</p>
-                <p className="text-xs text-muted-foreground">{s.desc}</p>
-              </div>
-              <ChevronRight size={16} className="text-muted-foreground" />
-            </button>
-          ))}
-        </div>
+        {/* RIGHT COLUMN – settings sections */}
+        <div className="flex-1 w-full max-w-md space-y-4 mx-auto lg:max-w-none">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-lg font-semibold">Profile</h1>
+              <p className="text-sm text-muted-foreground">
+                Manage your account, security, and preferences.
+              </p>
+            </div>
+          </div>
 
-        <Button
-          type="button"
-          onClick={handleLogoutClick}
-          variant="outline"
-          className="mt-6 flex w-full items-center justify-center gap-2 border-destructive/40 text-destructive hover:bg-destructive/10"
-        >
-          <LogOut size={14} />
-          <span className="text-xs font-medium">Log out</span>
-        </Button>
+          {/* Profile details */}
+          <section className="rounded-2xl border bg-card p-4 shadow-sm">
+            <h2 className="text-sm font-semibold">Profile details</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              This information is visible to people you collaborate with.
+            </p>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">
+                  Display name
+                </label>
+                <div className="rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+                  You
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">
+                  Email
+                </label>
+                <div className="rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+                  you@example.com
+                </div>
+              </div>
+
+              {/* STATUS DROPDOWN (shadcn Select) */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">
+                  Status
+                </label>
+                <Select
+                  value={status}
+                  onValueChange={(value) =>
+                    setStatus(value as PresenceStatus)
+                  }
+                >
+                  <SelectTrigger className="h-8 w-full rounded-lg border bg-muted/40 px-3 text-xs focus-visible:ring-0 focus-visible:ring-offset-0">
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent className="text-xs">
+                    <SelectItem value="online">Online</SelectItem>
+                    <SelectItem value="busy">Busy</SelectItem>
+                    <SelectItem value="dnd">DND</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </section>
+
+          {/* Settings list with "Soon" badges */}
+          {/* mb-6 gives extra gap below the last card */}
+          <section className="mb-6 rounded-2xl border bg-card p-3 shadow-sm">
+            <h2 className="px-1 text-sm font-semibold">Settings</h2>
+            <div className="mt-2 space-y-1">
+              {settings.map((s) => (
+                <button
+                  key={s.label}
+                  type="button"
+                  className="group relative flex w-full items-center gap-3 rounded-xl px-2 py-2.5 pr-14 text-left hover:bg-accent/60"
+                >
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary">
+                    <s.icon size={18} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">{s.label}</p>
+                    <p className="text-xs text-muted-foreground">{s.desc}</p>
+                  </div>
+
+                  {/* "Soon" badge aligned to the right */}
+                  <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    Soon
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+        </div>
       </div>
     </div>
   );
@@ -919,7 +1101,7 @@ function MembersPanel({
   );
 }
 
-// Full-width Members view (replaces chat on small screens)
+// Full-width Members view (mobile)
 function MembersMainSection({
   ws,
   onBack,
@@ -943,7 +1125,6 @@ function MembersMainSection({
 
   return (
     <div className="flex h-full flex-col">
-      {/* Top bar */}
       <div
         className={`flex ${HEADER_HEIGHT} items-center justify-between border-b px-4`}
       >
@@ -960,7 +1141,6 @@ function MembersMainSection({
         </div>
       </div>
 
-      {/* Members content */}
       <div
         className="flex-1 overflow-y-auto p-3
                    [scrollbar-gutter:stable]
@@ -1040,7 +1220,7 @@ function MembersMainSection({
   );
 }
 
-// Chat Section (keep NO visible scrollbar for messages)
+// Chat Section
 interface ChatSectionProps {
   ws: Workspace;
   onAddMessage: (id: string, role: Role, text: string) => void;
@@ -1096,7 +1276,6 @@ const ChatSection = memo(function ChatSection({
 
   return (
     <div className="flex h-full flex-col">
-      {/* Top bar */}
       <div
         className={`flex ${HEADER_HEIGHT} items-center justify-between border-b px-4`}
       >
@@ -1125,7 +1304,6 @@ const ChatSection = memo(function ChatSection({
         </span>
       </div>
 
-      {/* Messages area (no visible scroll bar) */}
       <div className="flex-1 overflow-hidden">
         <div
           ref={chatRef}
@@ -1187,7 +1365,6 @@ const ChatSection = memo(function ChatSection({
         </div>
       </div>
 
-      {/* Input area */}
       <div className="border-t p-3">
         <div className="rounded-xl border bg-muted/40 p-3">
           <textarea
@@ -1356,10 +1533,9 @@ function SidebarContent({
   );
 }
 
-// Constants for options dropdown positioning (mobile-safe)
-const DROPDOWN_WIDTH = 128; // px, matches w-32
-const DROPDOWN_HEIGHT = 120; // approx height for 3 items
-const DROPDOWN_MARGIN = 8; // px from viewport edges
+const DROPDOWN_WIDTH = 128;
+const DROPDOWN_HEIGHT = 120;
+const DROPDOWN_MARGIN = 8;
 
 // Sidebar (memoized) with drag-and-drop reordering
 interface SidebarProps {
@@ -1412,7 +1588,6 @@ const Sidebar = memo(function Sidebar({
     [nav]
   );
 
-  // viewport-aware options dropdown positioning
   const handleWorkspaceOptions = useCallback(
     (e: ReactMouseEvent<HTMLButtonElement>, id: string) => {
       e.stopPropagation();
@@ -1519,7 +1694,6 @@ const Sidebar = memo(function Sidebar({
 
   return (
     <>
-      {/* MOBILE CARD SIDEBAR + CLICK-OUTSIDE OVERLAY */}
       <aside
         className={[
           "fixed left-0 top-0 z-50 flex h-full w-full bg-background/40 backdrop-blur-md md:hidden",
@@ -1545,7 +1719,6 @@ const Sidebar = memo(function Sidebar({
         </div>
       </aside>
 
-      {/* DESKTOP SIDEBAR */}
       <aside className="hidden h-full w-56 flex-col border-r bg-background md:flex">
         <SidebarContent
           active={active}
@@ -1581,7 +1754,6 @@ export default function Page() {
     id: string;
   } | null>(null);
 
-  // which workspace is currently showing members in the main area
   const [membersViewFor, setMembersViewFor] = useState<string | null>(null);
 
   useEffect(() => {
@@ -1598,7 +1770,7 @@ export default function Page() {
   const handleCreate = useCallback((name: string, color: string) => {
     const ws: Workspace = {
       id: uid(),
-      code: generateWorkspaceCode(), // 6-char uppercase code
+      code: generateWorkspaceCode(),
       name,
       messages: [],
       color,
@@ -1674,7 +1846,6 @@ export default function Page() {
     (id: string) => {
       setWorkspaces((p) => p.filter((ws) => ws.id !== id));
       if (active === id) setActive("empty");
-      // if we were viewing members for this workspace, clear it
       setMembersViewFor((cur) => (cur === id ? null : cur));
     },
     [active]
@@ -1728,7 +1899,6 @@ export default function Page() {
       const next = workspaces.filter((w) => w.id !== wsId);
       setWorkspaces(next);
 
-      // If we were viewing this workspace, switch to another or empty
       if (active === wsId) {
         if (next.length === 0) {
           setActive("empty");
@@ -1738,7 +1908,6 @@ export default function Page() {
         }
       }
 
-      // If members view was open for this workspace, close it
       setMembersViewFor((cur) => (cur === wsId ? null : cur));
 
       toast.success(`You left "${ws.name}"`);
@@ -1797,7 +1966,6 @@ export default function Page() {
       key: "Support",
       active: false,
       onClick: () => {
-        // Placeholder for support; just close dropdown
         setMobileTopNavOpen(false);
       },
     },
@@ -1827,7 +1995,6 @@ export default function Page() {
               <Menu size={18} />
             </button>
 
-            {/* Branding (mobile) */}
             <div className="flex items-center gap-1.5 md:hidden">
               <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary text-[10px] font-bold text-primary-foreground">
                 q
@@ -1835,7 +2002,6 @@ export default function Page() {
               <span className="text-sm font-semibold">qPal</span>
             </div>
 
-            {/* Top nav dropdown (mobile) */}
             <div className="relative md:hidden">
               <button
                 type="button"
@@ -1870,7 +2036,6 @@ export default function Page() {
               )}
             </div>
 
-            {/* Top nav (desktop) */}
             <div className="hidden gap-1 text-[11px] text-muted-foreground md:flex">
               {["Home", "Docs", "Support"].map((item) => (
                 <button
