@@ -27,10 +27,7 @@ const EMOJI_MAP: Record<string, string> = {
 const TOC_PLACEHOLDER = "§§__MD_TOC__§§";
 
 function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 function escapeHtmlAttr(str: string): string {
@@ -174,9 +171,8 @@ export function renderMarkdown(src: string): string {
     s = s.replace(/\n/g, " ");
 
     // Escapes: \* \# \_ etc.
-    s = s.replace(
-      /\\([\\`*_{}\[\]()#+\-.!|>~:=])/g,
-      (_m, ch: string) => makePlaceholder(escapeHtml(ch))
+    s = s.replace(/\\([\\`*_{}\[\]()#+\-.!|>~:=])/g, (_m, ch: string) =>
+      makePlaceholder(escapeHtml(ch))
     );
 
     // Code spans: `code`
@@ -189,16 +185,14 @@ export function renderMarkdown(src: string): string {
     );
 
     // Autolinks with angle brackets: <https://...>, <email@example.com>
-    s = s.replace(
-      /<((?:https?|ftp):\/\/[^>]+)>/g,
-      (_m, url: string) =>
-        makePlaceholder(
-          `<a href="${escapeHtmlAttr(
-            url
-          )}" target="_blank" rel="noreferrer" class="text-primary underline-offset-2 hover:underline">${escapeHtml(
-            url
-          )}</a>`
-        )
+    s = s.replace(/<((?:https?|ftp):\/\/[^>]+)>/g, (_m, url: string) =>
+      makePlaceholder(
+        `<a href="${escapeHtmlAttr(
+          url
+        )}" target="_blank" rel="noreferrer" class="text-primary underline-offset-2 hover:underline">${escapeHtml(
+          url
+        )}</a>`
+      )
     );
 
     s = s.replace(
@@ -323,17 +317,13 @@ export function renderMarkdown(src: string): string {
     );
 
     // Italic: *text* or _text_
-    s = s.replace(
-      /(\*|_)([^]+?)\1/g,
-      (_m, _wrapper: string, content: string) =>
-        makePlaceholder(`<em class="italic">${escapeHtml(content)}</em>`)
+    s = s.replace(/(\*|_)([^]+?)\1/g, (_m, _wrapper: string, content: string) =>
+      makePlaceholder(`<em class="italic">${escapeHtml(content)}</em>`)
     );
 
     // Strikethrough: ~~text~~
     s = s.replace(/~~([^~]+)~~/g, (_m, content: string) =>
-      makePlaceholder(
-        `<del class="opacity-70">${escapeHtml(content)}</del>`
-      )
+      makePlaceholder(`<del class="opacity-70">${escapeHtml(content)}</del>`)
     );
 
     // Colored text:
@@ -370,9 +360,9 @@ export function renderMarkdown(src: string): string {
         if (hexMatch) {
           const hex = `#${hexMatch[1]}`;
           return makePlaceholder(
-            `<span style="color:${escapeHtmlAttr(
-              hex
-            )}">${renderInline(content)}</span>`
+            `<span style="color:${escapeHtmlAttr(hex)}">${renderInline(
+              content
+            )}</span>`
           );
         }
 
@@ -605,7 +595,7 @@ export function renderMarkdown(src: string): string {
 
       const itemLines: string[] = [content];
 
-      // gather continuation lines
+      // gather continuation lines (paragraphs inside this list item)
       while (i < lines.length) {
         const l = lines[i];
         if (!l.trim()) {
@@ -613,10 +603,9 @@ export function renderMarkdown(src: string): string {
           break;
         }
         const mm = l.match(itemRe);
-        if (mm) {
-          const ind2 = mm[1].length;
-          if (ind2 <= baseIndent) break;
-        }
+        // any new list item (same or deeper) ends this item's paragraph
+        if (mm) break;
+
         itemLines.push(l.replace(new RegExp(`^\\s{0,${baseIndent + 2}}`), ""));
         i++;
       }
@@ -644,9 +633,7 @@ export function renderMarkdown(src: string): string {
       ? "list-decimal list-inside ml-4 my-2 space-y-1"
       : "list-disc list-inside ml-4 my-2 space-y-1";
 
-    const html = `<${tag} class="${listClass}">${items.join(
-      ""
-    )}</${tag}>`;
+    const html = `<${tag} class="${listClass}">${items.join("")}</${tag}>`;
     return { html, next: i };
   };
 
@@ -822,9 +809,7 @@ export function renderMarkdown(src: string): string {
           items.push(
             `<dt class="font-medium text-xs text-muted-foreground uppercase tracking-wide">${renderInline(
               d[1].trim()
-            )}</dt><dd class="ml-3 text-sm">${renderInline(
-              d[2].trim()
-            )}</dd>`
+            )}</dt><dd class="ml-3 text-sm">${renderInline(d[2].trim())}</dd>`
           );
           i++;
         }
@@ -915,12 +900,7 @@ const MDFormatting: React.FC<MDFormattingProps> = ({ text, className }) => {
     "md-formatting text-sm leading-relaxed space-y-1 break-words" +
     (className ? ` ${className}` : "");
 
-  return (
-    <div
-      className={classes}
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
-  );
+  return <div className={classes} dangerouslySetInnerHTML={{ __html: html }} />;
 };
 
 export default MDFormatting;
