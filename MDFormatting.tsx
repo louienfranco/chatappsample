@@ -164,15 +164,14 @@ export function renderMarkdown(src: string): string {
     // Normalize newlines
     s = s.replace(/\r\n?/g, "\n");
 
-    // Hard breaks: two or more spaces then newline
-    s = s.replace(/ {2,}\n/g, () => makePlaceholder('<br class="block" />'));
-
-    // Soft breaks: remaining newlines -> space
-    s = s.replace(/\n/g, " ");
+    // Treat *all* newlines inside a block as hard line breaks
+    // (instead of converting to spaces).
+    s = s.replace(/\n/g, () => makePlaceholder('<br class="block" />'));
 
     // Escapes: \* \# \_ etc.
-    s = s.replace(/\\([\\`*_{}\[\]()#+\-.!|>~:=])/g, (_m, ch: string) =>
-      makePlaceholder(escapeHtml(ch))
+    s = s.replace(
+      /\\([\\`*_{}\[\]()#+\-.!|>~:=])/g,
+      (_m, ch: string) => makePlaceholder(escapeHtml(ch))
     );
 
     // Code spans: `code`
@@ -185,14 +184,16 @@ export function renderMarkdown(src: string): string {
     );
 
     // Autolinks with angle brackets: <https://...>, <email@example.com>
-    s = s.replace(/<((?:https?|ftp):\/\/[^>]+)>/g, (_m, url: string) =>
-      makePlaceholder(
-        `<a href="${escapeHtmlAttr(
-          url
-        )}" target="_blank" rel="noreferrer" class="text-primary underline-offset-2 hover:underline">${escapeHtml(
-          url
-        )}</a>`
-      )
+    s = s.replace(
+      /<((?:https?|ftp):\/\/[^>]+)>/g,
+      (_m, url: string) =>
+        makePlaceholder(
+          `<a href="${escapeHtmlAttr(
+            url
+          )}" target="_blank" rel="noreferrer" class="text-primary underline-offset-2 hover:underline">${escapeHtml(
+            url
+          )}</a>`
+        )
     );
 
     s = s.replace(
@@ -317,26 +318,25 @@ export function renderMarkdown(src: string): string {
     );
 
     // Italic: *text* or _text_
-    s = s.replace(/(\*|_)([^]+?)\1/g, (_m, _wrapper: string, content: string) =>
-      makePlaceholder(`<em class="italic">${escapeHtml(content)}</em>`)
+    s = s.replace(
+      /(\*|_)([^]+?)\1/g,
+      (_m, _wrapper: string, content: string) =>
+        makePlaceholder(`<em class="italic">${escapeHtml(content)}</em>`)
     );
 
     // Strikethrough: ~~text~~
     s = s.replace(/~~([^~]+)~~/g, (_m, content: string) =>
-      makePlaceholder(`<del class="opacity-70">${escapeHtml(content)}</del>`)
+      makePlaceholder(
+        `<del class="opacity-70">${escapeHtml(content)}</del>`
+      )
     );
 
-    // Colored text:
-    // 1) Named colors: [color=red]...[/color]  where color ∈ {red, blue, green, yellow, pink, purple, orange}
-    //    -> Tailwind class: text-red-500, text-blue-500, ...
-    // 2) Hex colors: [color=#ff00aa]...[/color] or [color=ff00aa]...[/color]
-    //    -> inline style: style="color:#ff00aa"
+    // Colored text
     s = s.replace(
       /\[color=([#a-zA-Z0-9]+)\]([\s\S]+?)\[\/color\]/g,
       (_m, rawColor: string, content: string) => {
         const lower = rawColor.toLowerCase();
 
-        // 1. Named colors -> Tailwind text-*-500
         const namedColors = new Set([
           "red",
           "blue",
@@ -355,18 +355,16 @@ export function renderMarkdown(src: string): string {
           );
         }
 
-        // 2. Hex color -> inline style color:#xxxxxx
         const hexMatch = lower.match(/^#?([0-9a-f]{3}|[0-9a-f]{6})$/i);
         if (hexMatch) {
           const hex = `#${hexMatch[1]}`;
           return makePlaceholder(
-            `<span style="color:${escapeHtmlAttr(hex)}">${renderInline(
-              content
-            )}</span>`
+            `<span style="color:${escapeHtmlAttr(
+              hex
+            )}">${renderInline(content)}</span>`
           );
         }
 
-        // Unknown color format -> leave raw text untouched
         return _m;
       }
     );
@@ -462,8 +460,6 @@ export function renderMarkdown(src: string): string {
         )
       );
     });
-
-    // HTML entities (&amp;, &copy;, etc.) are left as-is
 
     return s;
   };
@@ -606,7 +602,9 @@ export function renderMarkdown(src: string): string {
         // any new list item (same or deeper) ends this item's paragraph
         if (mm) break;
 
-        itemLines.push(l.replace(new RegExp(`^\\s{0,${baseIndent + 2}}`), ""));
+        itemLines.push(
+          l.replace(new RegExp(`^\\s{0,${baseIndent + 2}}`), "")
+        );
         i++;
       }
 
@@ -809,7 +807,9 @@ export function renderMarkdown(src: string): string {
           items.push(
             `<dt class="font-medium text-xs text-muted-foreground uppercase tracking-wide">${renderInline(
               d[1].trim()
-            )}</dt><dd class="ml-3 text-sm">${renderInline(d[2].trim())}</dd>`
+            )}</dt><dd class="ml-3 text-sm">${renderInline(
+              d[2].trim()
+            )}</dd>`
           );
           i++;
         }
