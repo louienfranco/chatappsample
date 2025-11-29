@@ -757,11 +757,7 @@ function AddMemberDialog({
 }
 
 // Profile Section with shadcn Select + "Soon" badges + extra bottom spacing
-function ProfileSection({
-  onRequestLogout,
-}: {
-  onRequestLogout: () => void;
-}) {
+function ProfileSection({ onRequestLogout }: { onRequestLogout: () => void }) {
   const [status, setStatus] = useState<PresenceStatus>("online");
 
   const settings = [
@@ -842,15 +838,17 @@ function ProfileSection({
           <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
             <div className="h-20 bg-gradient-to-r from-violet-500 via-purple-500 to-fuchsia-500" />
             <div className="relative px-4 pb-4">
-              <div className="absolute -top-10 left-4 rounded-2xl border-4 border-card bg-card">
-                <Avatar name="You" size="lg" />
+              <div className="absolute -top-8 left-4">
+                <div className="rounded-full">
+                  <div className="rounded-full border-4 border-card bg-card">
+                    <Avatar name="You" size="lg" />
+                  </div>
+                </div>
               </div>
 
               <div className="pt-10">
                 <h1 className="text-base font-semibold">You</h1>
-                <p className="text-sm text-muted-foreground">
-                  you@example.com
-                </p>
+                <p className="text-sm text-muted-foreground">you@example.com</p>
                 <p
                   className={[
                     "mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5",
@@ -958,9 +956,7 @@ function ProfileSection({
                 </label>
                 <Select
                   value={status}
-                  onValueChange={(value) =>
-                    setStatus(value as PresenceStatus)
-                  }
+                  onValueChange={(value) => setStatus(value as PresenceStatus)}
                 >
                   <SelectTrigger className="h-8 w-full rounded-lg border bg-muted/40 px-3 text-xs focus-visible:ring-0 focus-visible:ring-offset-0">
                     <SelectValue placeholder="Select status" />
@@ -1508,9 +1504,7 @@ function SidebarContent({
             {regular.length > 0 && (
               <>
                 {starred.length > 0 && (
-                  <p className="px-3 text-[10px] text-muted-foreground">
-                    All
-                  </p>
+                  <p className="px-3 text-[10px] text-muted-foreground">All</p>
                 )}
                 {regular.map(renderDraggableWorkspace)}
               </>
