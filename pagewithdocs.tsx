@@ -136,6 +136,33 @@ const COLOR_MAP: Record<
   },
 } as const;
 
+// Static settings used in ProfileSection
+const SETTINGS = [
+  {
+    icon: UserCog,
+    label: "Account",
+    desc: "Basic account information",
+  },
+  {
+    icon: Shield,
+    label: "Security",
+    desc: "Password & 2‑factor authentication",
+  },
+  {
+    icon: Bell,
+    label: "Notifications",
+    desc: "Email & in‑app alerts",
+  },
+  {
+    icon: Palette,
+    label: "Appearance",
+    desc: "Theme & display preferences",
+  },
+] as const;
+
+// Inline icon lists moved to top-level to avoid re-creating on every render
+const INLINE_ICONS = [Sticker];
+
 // Utils
 const uid = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -165,8 +192,8 @@ const getWorkspaceColorClasses = (name?: string) => {
   return { bg: c.activeBg, text: c.activeText };
 };
 
-// Avatar
-function Avatar({
+// Avatar (memoized)
+const Avatar = memo(function Avatar({
   name,
   size = "md",
   variant = "user",
@@ -179,11 +206,11 @@ function Avatar({
     sm: "h-7 w-7 text-xs",
     md: "h-9 w-9 text-sm",
     lg: "h-14 w-14 text-lg",
-  };
+  } as const;
   const gradients = {
     user: "from-violet-500 to-purple-600",
     bot: "from-emerald-400 to-green-500",
-  };
+  } as const;
   return (
     <div
       className={`flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br font-semibold text-white ${sizes[size]} ${gradients[variant]}`}
@@ -191,10 +218,10 @@ function Avatar({
       {name.charAt(0).toUpperCase()}
     </div>
   );
-}
+});
 
 // Nav Item
-function NavItem({
+const NavItem = memo(function NavItem({
   active,
   onClick,
   label,
@@ -234,10 +261,10 @@ function NavItem({
       )}
     </button>
   );
-}
+});
 
 // Workspace Item
-function WorkspaceItem({
+const WorkspaceItem = memo(function WorkspaceItem({
   ws,
   active,
   onClick,
@@ -292,10 +319,10 @@ function WorkspaceItem({
       </button>
     </div>
   );
-}
+});
 
 // Options Dropdown
-function OptionsDropdown({
+const OptionsDropdown = memo(function OptionsDropdown({
   ws,
   pos,
   onClose,
@@ -354,10 +381,14 @@ function OptionsDropdown({
       ))}
     </div>
   );
-}
+});
 
 // Empty State
-function EmptyState({ onCreate }: { onCreate: () => void }) {
+const EmptyState = memo(function EmptyState({
+  onCreate,
+}: {
+  onCreate: () => void;
+}) {
   return (
     <div className="flex h-full flex-col items-center justify-center">
       <MessageCircle size={40} className="text-muted-foreground/40" />
@@ -370,10 +401,9 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
       </Button>
     </div>
   );
-}
+});
 
-// Create Workspace
-function CreateWorkspace({
+const CreateWorkspace = memo(function CreateWorkspace({
   onCreate,
   onCancel,
 }: {
@@ -515,10 +545,10 @@ function CreateWorkspace({
       </div>
     </div>
   );
-}
+});
 
 // Dialogs
-function RenameDialog({
+const RenameDialog = memo(function RenameDialog({
   ws,
   onRename,
   onClose,
@@ -566,9 +596,9 @@ function RenameDialog({
       </div>
     </div>
   );
-}
+});
 
-function DeleteDialog({
+const DeleteDialog = memo(function DeleteDialog({
   ws,
   onConfirm,
   onClose,
@@ -603,10 +633,10 @@ function DeleteDialog({
       </div>
     </div>
   );
-}
+});
 
 // Leave Workspace Dialog
-function LeaveDialog({
+const LeaveDialog = memo(function LeaveDialog({
   ws,
   onConfirm,
   onClose,
@@ -642,10 +672,10 @@ function LeaveDialog({
       </div>
     </div>
   );
-}
+});
 
 // Logout Dialog
-function LogoutDialog({
+const LogoutDialog = memo(function LogoutDialog({
   onConfirm,
   onClose,
 }: {
@@ -678,10 +708,10 @@ function LogoutDialog({
       </div>
     </div>
   );
-}
+});
 
 // Add Member Dialog
-function AddMemberDialog({
+const AddMemberDialog = memo(function AddMemberDialog({
   ws,
   onAdd,
   onClose,
@@ -754,34 +784,17 @@ function AddMemberDialog({
       </div>
     </div>
   );
-}
+});
 
 // Profile Section with shadcn Select + "Soon" badges + extra bottom spacing
-function ProfileSection({ onRequestLogout }: { onRequestLogout: () => void }) {
+const ProfileSection = memo(function ProfileSection({
+  onRequestLogout,
+}: {
+  onRequestLogout: () => void;
+}) {
   const [status, setStatus] = useState<PresenceStatus>("online");
 
-  const settings = [
-    {
-      icon: UserCog,
-      label: "Account",
-      desc: "Basic account information",
-    },
-    {
-      icon: Shield,
-      label: "Security",
-      desc: "Password & 2‑factor authentication",
-    },
-    {
-      icon: Bell,
-      label: "Notifications",
-      desc: "Email & in‑app alerts",
-    },
-    {
-      icon: Palette,
-      label: "Appearance",
-      desc: "Theme & display preferences",
-    },
-  ];
+  const settings = SETTINGS;
 
   const statusLabelMap: Record<PresenceStatus, string> = {
     online: "Online",
@@ -1002,7 +1015,7 @@ function ProfileSection({ onRequestLogout }: { onRequestLogout: () => void }) {
       </div>
     </div>
   );
-}
+});
 
 // Members Panel (sidebar on lg+)
 function MembersPanel({
@@ -1373,7 +1386,7 @@ const ChatSection = memo(function ChatSection({
             className="max-h-[120px] min-h-[36px] w-full resize-none bg-transparent py-1 text-sm outline-none"
           />
           <div className="mt-1 flex items-center gap-1">
-            {[Sticker].map((Icon, i) => (
+            {INLINE_ICONS.map((Icon, i) => (
               <Button key={i} variant="ghost" size="icon" className="h-7 w-7">
                 <Icon size={16} />
               </Button>
@@ -1749,16 +1762,25 @@ export default function Page() {
   } | null>(null);
 
   const [membersViewFor, setMembersViewFor] = useState<string | null>(null);
+  const resizeTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     const onResize = () => {
-      if (window.innerWidth >= DESKTOP_BP) {
-        setSidebarOpen(false);
-        setMobileTopNavOpen(false);
-      }
+      if (resizeTimeoutRef.current)
+        window.clearTimeout(resizeTimeoutRef.current);
+      resizeTimeoutRef.current = window.setTimeout(() => {
+        if (window.innerWidth >= DESKTOP_BP) {
+          setSidebarOpen(false);
+          setMobileTopNavOpen(false);
+        }
+      }, 150);
     };
     window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      if (resizeTimeoutRef.current)
+        window.clearTimeout(resizeTimeoutRef.current);
+    };
   }, []);
 
   const handleCreate = useCallback((name: string, color: string) => {
@@ -1939,31 +1961,34 @@ export default function Page() {
 
   const currentTopLabel = active === "docs" ? "Docs" : "Home";
 
-  const topNavItems = [
-    {
-      key: "Home",
-      active: homeActive,
-      onClick: () => {
-        handleHomeClick();
-        setMobileTopNavOpen(false);
+  const topNavItems = useMemo(
+    () => [
+      {
+        key: "Home",
+        active: homeActive,
+        onClick: () => {
+          handleHomeClick();
+          setMobileTopNavOpen(false);
+        },
       },
-    },
-    {
-      key: "Docs",
-      active: active === "docs",
-      onClick: () => {
-        setActive("docs");
-        setMobileTopNavOpen(false);
+      {
+        key: "Docs",
+        active: active === "docs",
+        onClick: () => {
+          setActive("docs");
+          setMobileTopNavOpen(false);
+        },
       },
-    },
-    {
-      key: "Support",
-      active: false,
-      onClick: () => {
-        setMobileTopNavOpen(false);
+      {
+        key: "Support",
+        active: false,
+        onClick: () => {
+          setMobileTopNavOpen(false);
+        },
       },
-    },
-  ];
+    ],
+    [homeActive, active, handleHomeClick]
+  );
 
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-background text-foreground">
