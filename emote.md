@@ -24,10 +24,12 @@
 ```
 
 ```tsx
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import emotesData from './emote.json';
+import { useState, useEffect, useRef } from "react";
+import Image from "next/image";
+import emotesData from "./emote.json";
+import AutoAdd from "./AutoAdd";
 
 import {
   Dialog,
@@ -36,32 +38,32 @@ import {
   DialogTitle,
   DialogDescription,
   DialogTrigger,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Input } from '@/components/ui/input';
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectTrigger,
   SelectValue,
   SelectContent,
   SelectItem,
-} from '@/components/ui/select';
+} from "@/components/ui/select";
 
 type Emote = {
   name: string;
   id: string;
   category?: string; // optional so old/new emotes still work
+  type?: "emote" | "sticker";
 };
 
-const EMOTE_BASE_URL = 'https://cdn.7tv.app/emote';
+// Use 7TV CDN for emotes
+const EMOTE_BASE_URL = "https://cdn.7tv.app/emote";
 const EMOTES = emotesData as Emote[];
 
 // Unique category list for the Select
 const CATEGORIES: string[] = Array.from(
-  new Set(
-    EMOTES.map((e) => e.category).filter(Boolean) as string[]
-  )
+  new Set(EMOTES.map((e) => e.category).filter(Boolean) as string[])
 );
 
 type EmotePickerButtonProps = {
@@ -73,57 +75,73 @@ type EmotePickerButtonProps = {
 function AnimatedEmote({
   emote,
   onSelect,
+  resetCounter,
 }: {
   emote: Emote;
   onSelect: (emote: Emote) => void;
+  resetCounter?: number;
 }) {
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [inView, setInView] = useState(false);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
 
+  // Append resetCounter to force the browser to reload the image when the
+  // modal is closed and reopened — this resets animated WebP playback.
+  const src = `${EMOTE_BASE_URL}/${emote.id}/1x.webp${
+    typeof resetCounter !== "undefined" ? `?r=${resetCounter}` : ""
+  }`;
+
+  // Lazy-load images only when the emote button is visible in the scroll area.
   useEffect(() => {
-    let url: string | null = null;
+    const el = btnRef.current;
+    if (!el) return;
+    if (inView) return; // already visible
 
-    const fetchImage = async () => {
-      try {
-        const response = await fetch(
-          `${EMOTE_BASE_URL}/${emote.id}/2x.avif`
-        );
-        const blob = await response.blob();
-        url = URL.createObjectURL(blob);
-        setBlobUrl(url);
-      } catch (error) {
-        console.error('Failed to fetch emote:', error);
-      }
-    };
+    const obs = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setInView(true);
+            obs.disconnect();
+          }
+        });
+      },
+      { root: null, rootMargin: "200px", threshold: 0 }
+    );
 
-    fetchImage();
-
-    return () => {
-      if (url) {
-        URL.revokeObjectURL(url);
-      }
-    };
-  }, [emote.id]);
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [inView]);
 
   return (
     <button
+      ref={btnRef}
       type="button"
       onClick={() => onSelect(emote)}
       className="flex h-9 w-9 items-center justify-center rounded-md bg-muted/40 transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       aria-label={emote.name}
-      title={
-        emote.category ? `${emote.name} (${emote.category})` : emote.name
-      }
+      title={emote.category ? `${emote.name} (${emote.category})` : emote.name}
     >
-      {blobUrl ? (
+      {inView ? (
         <img
-          src={blobUrl}
+          src={src}
           alt={emote.name}
           width={28}
           height={28}
-          className="rounded object-contain"
+          loading="lazy"
+          className={
+            loaded
+              ? "rounded object-contain"
+              : "rounded object-contain opacity-0"
+          }
+          onLoad={() => setLoaded(true)}
         />
       ) : (
         <div className="h-7 w-7 animate-pulse rounded bg-muted" />
+      )}
+
+      {!loaded && inView && (
+        <div className="h-7 w-7 animate-pulse rounded bg-muted absolute" />
       )}
     </button>
   );
@@ -131,9 +149,13 @@ function AnimatedEmote({
 
 function EmotePickerButton({ onSelect, children }: EmotePickerButtonProps) {
   const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<'all' | string>(
-    'all'
+  const [resetCounter, setResetCounter] = useState(0);
+  const [search, setSearch] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<"all" | string>(
+    "all"
+  );
+  const [selectedType, setSelectedType] = useState<"all" | "emote" | "sticker">(
+    "all"
   );
 
   const handleSelect = (emote: Emote) => {
@@ -143,38 +165,43 @@ function EmotePickerButton({ onSelect, children }: EmotePickerButtonProps) {
 
   const filteredEmotes = EMOTES.filter((emote) => {
     // Filter by category first
-    if (
-      selectedCategory !== 'all' &&
-      emote.category !== selectedCategory
-    ) {
+    if (selectedCategory !== "all" && emote.category !== selectedCategory) {
       return false;
+    }
+
+    if (selectedType !== "all") {
+      // treat missing type as 'emote' by default
+      const eType: "emote" | "sticker" =
+        (emote.type as "emote" | "sticker") || "emote";
+      if (eType !== selectedType) return false;
     }
 
     const q = search.trim().toLowerCase();
     if (!q) return true;
 
     const name = emote.name.toLowerCase();
-    const category = (emote.category ?? '').toLowerCase();
+    const category = (emote.category ?? "").toLowerCase();
     return name.includes(q) || category.includes(q);
   });
 
+  const handleOpenChange = (value: boolean) => {
+    // When the dialog closes, increment the reset counter so images get a
+    // cache-busting query param on next open and the animated WebP restarts.
+    if (!value) setResetCounter((c) => c + 1);
+    setOpen(value);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button
-          variant="outline"
-          size="icon"
-          className="h-9 w-9 rounded-full"
-        >
+        <Button variant="outline" size="icon" className="h-9 w-9 rounded-full">
           {children ?? <span className="text-lg">😊</span>}
         </Button>
       </DialogTrigger>
 
       <DialogContent className="sm:max-w-[420px]">
         <DialogHeader>
-          <DialogTitle className="text-sm font-semibold">
-            Emotes
-          </DialogTitle>
+          <DialogTitle className="text-sm font-semibold">Emotes</DialogTitle>
           <DialogDescription className="text-xs">
             Filter by category and search by name or category.
           </DialogDescription>
@@ -185,7 +212,7 @@ function EmotePickerButton({ onSelect, children }: EmotePickerButtonProps) {
           <Select
             value={selectedCategory}
             onValueChange={(value) =>
-              setSelectedCategory(value as 'all' | string)
+              setSelectedCategory(value as "all" | string)
             }
           >
             <SelectTrigger className="h-8 w-32 text-xs">
@@ -207,6 +234,17 @@ function EmotePickerButton({ onSelect, children }: EmotePickerButtonProps) {
             onChange={(e) => setSearch(e.target.value)}
             className="h-8 text-xs"
           />
+          <select
+            value={selectedType}
+            onChange={(e) =>
+              setSelectedType(e.target.value as "all" | "emote" | "sticker")
+            }
+            className="h-8 rounded border bg-transparent px-2 text-xs"
+          >
+            <option value="all">All</option>
+            <option value="emote">Emote</option>
+            <option value="sticker">Sticker</option>
+          </select>
         </div>
 
         {/* Emotes grid */}
@@ -215,9 +253,10 @@ function EmotePickerButton({ onSelect, children }: EmotePickerButtonProps) {
             {open &&
               filteredEmotes.map((emote) => (
                 <AnimatedEmote
-                  key={emote.id}
+                  key={`${emote.id}-${resetCounter}`}
                   emote={emote}
                   onSelect={handleSelect}
+                  resetCounter={resetCounter}
                 />
               ))}
 
@@ -236,8 +275,14 @@ function EmotePickerButton({ onSelect, children }: EmotePickerButtonProps) {
 export default function EmoteSelectionPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-4">
-      <EmotePickerButton />
+      <div className="w-full max-w-xl">
+        <AutoAdd />
+        <div className="mt-4">
+          <EmotePickerButton />
+        </div>
+      </div>
     </main>
   );
 }
+
 ```
