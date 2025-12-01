@@ -41,6 +41,7 @@ import {
   UserSearch,
   ArrowLeft,
   LogOut,
+  CornerUpLeft,
 } from "lucide-react";
 
 import {
@@ -72,6 +73,8 @@ interface Message {
   role: Role;
   text: string;
   time: string;
+  deleted?: boolean;
+  replyToId?: string;
 }
 
 interface Member {
@@ -1230,11 +1233,19 @@ function MembersMainSection({
 interface MessageListProps {
   messages: Message[];
   workspaceName: string;
+  onReply: (message: Message) => void;
+  onDelete: (messageId: string) => void;
 }
 
 const MessageList = memo(
-  function MessageList({ messages, workspaceName }: MessageListProps) {
+  function MessageList({
+    messages,
+    workspaceName,
+    onReply,
+    onDelete,
+  }: MessageListProps) {
     const [copiedId, setCopiedId] = useState<string | null>(null);
+    const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
     const chatRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -1255,6 +1266,10 @@ const MessageList = memo(
       }
     }, []);
 
+    const toggleMenu = useCallback((id: string) => {
+      setMenuOpenId((prev) => (prev === id ? null : id));
+    }, []);
+
     return (
       <div
         ref={chatRef}
@@ -1272,44 +1287,131 @@ const MessageList = memo(
             </div>
           ) : (
             <div className="space-y-3">
-              {messages.map((m) => (
-                <div
-                  key={m.id}
-                  className="group flex items-start gap-3 rounded-lg p-2 hover:bg-accent/40"
-                >
-                  <Avatar
-                    name={m.role === "user" ? "You" : "Bot"}
-                    variant={m.role === "user" ? "user" : "bot"}
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-baseline gap-2">
-                      <span
-                        className={`text-sm font-medium ${
-                          m.role === "bot" ? "text-green-600" : ""
-                        }`}
-                      >
-                        {m.role === "user" ? "@You" : "@Bot"}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {m.time}
-                      </span>
-                      {m.role === "bot" && (
-                        <button
-                          onClick={() => copyText(m)}
-                          className="opacity-0 group-hover:opacity-100"
+              {messages.map((m) => {
+                const isDeleted = !!m.deleted;
+                const repliedTo = m.replyToId
+                  ? messages.find((mm) => mm.id === m.replyToId)
+                  : undefined;
+
+                const repliedToLabel =
+                  repliedTo?.role === "user"
+                    ? "@You"
+                    : repliedTo?.role === "bot"
+                    ? "@Bot"
+                    : undefined;
+
+                return (
+                  <div
+                    key={m.id}
+                    className="flex items-start gap-3 rounded-lg p-2"
+                  >
+                    <Avatar
+                      name={m.role === "user" ? "You" : "Bot"}
+                      variant={m.role === "user" ? "user" : "bot"}
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-baseline gap-2">
+                        <span
+                          className={`text-sm font-medium ${
+                            m.role === "bot" ? "text-green-600" : ""
+                          }`}
                         >
-                          {copiedId === m.id ? (
-                            <Check size={12} />
-                          ) : (
-                            <Copy size={12} />
+                          {m.role === "user" ? "@You" : "@Bot"}
+                        </span>
+                        <div className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
+                          <span>{m.time}</span>
+                          {!isDeleted && (
+                            <button
+                              type="button"
+                              onClick={() => toggleMenu(m.id)}
+                              className="flex h-5 w-5 items-center justify-center rounded-md hover:bg-accent"
+                              aria-label="Message options"
+                            >
+                              <ChevronDown size={12} />
+                            </button>
                           )}
-                        </button>
+                        </div>
+                      </div>
+
+                      {menuOpenId === m.id && !isDeleted && (
+                        <div className="mt-1 flex gap-1 text-muted-foreground">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onReply(m);
+                              setMenuOpenId(null);
+                            }}
+                            className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-accent"
+                            aria-label="Reply"
+                            title="Reply"
+                          >
+                            <CornerUpLeft size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              await copyText(m);
+                              setMenuOpenId(null);
+                            }}
+                            className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-accent"
+                            aria-label="Copy"
+                            title="Copy"
+                          >
+                            {copiedId === m.id ? (
+                              <Check size={12} />
+                            ) : (
+                              <Copy size={12} />
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onDelete(m.id);
+                              setMenuOpenId(null);
+                            }}
+                            className="flex h-6 w-6 items-center justify-center rounded-md text-destructive hover:bg-destructive/10"
+                            aria-label="Delete for everyone"
+                            title="Delete for everyone"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Reply header: always show who we replied to, even if original deleted */}
+                      {!isDeleted && repliedTo && repliedToLabel && (
+                        <div className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+                          <CornerUpLeft size={10} />
+                          <span>Replying to {repliedToLabel}</span>
+                          {repliedTo.deleted && (
+                            <span className="italic opacity-70">
+                              · original message deleted
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Quoted block only while original is not deleted */}
+                      {!isDeleted &&
+                        repliedTo &&
+                        !repliedTo.deleted &&
+                        repliedTo.text && (
+                          <div className="mt-1 border-l-2 border-muted-foreground/30 pl-2 text-[11px] text-muted-foreground">
+                            <MDFormatting text={repliedTo.text} />
+                          </div>
+                        )}
+
+                      {isDeleted ? (
+                        <p className="mt-0.5 text-xs italic text-muted-foreground">
+                          deleted message
+                        </p>
+                      ) : (
+                        <MDFormatting text={m.text} className="mt-0.5" />
                       )}
                     </div>
-                    <MDFormatting text={m.text} className="mt-0.5" />
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -1324,25 +1426,47 @@ const MessageList = memo(
 // Chat Section
 interface ChatSectionProps {
   ws: Workspace;
-  onAddMessage: (id: string, role: Role, text: string) => void;
+  onAddMessage: (
+    id: string,
+    role: Role,
+    text: string,
+    replyToId?: string
+  ) => void;
+  onDeleteMessage: (wsId: string, messageId: string) => void;
   onShowMembers?: () => void;
 }
 
 const ChatSection = memo(function ChatSection({
   ws,
   onAddMessage,
+  onDeleteMessage,
   onShowMembers,
 }: ChatSectionProps) {
   const [input, setInput] = useState("");
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleReply = useCallback((message: Message) => {
+    setReplyTo(message);
+    if (textareaRef.current) textareaRef.current.focus();
+  }, []);
+
+  const handleDelete = useCallback(
+    (messageId: string) => {
+      onDeleteMessage(ws.id, messageId);
+    },
+    [onDeleteMessage, ws.id]
+  );
 
   const handleSend = useCallback(() => {
     const trimmed = input.trim();
     if (!trimmed) return;
-    onAddMessage(ws.id, "user", trimmed);
+
+    onAddMessage(ws.id, "user", trimmed, replyTo?.id);
     setInput("");
+    setReplyTo(null);
     if (textareaRef.current) textareaRef.current.style.height = "auto";
-  }, [input, onAddMessage, ws.id]);
+  }, [input, onAddMessage, ws.id, replyTo]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -1399,11 +1523,43 @@ const ChatSection = memo(function ChatSection({
       </div>
 
       <div className="flex-1 overflow-hidden">
-        <MessageList messages={ws.messages} workspaceName={ws.name} />
+        <MessageList
+          messages={ws.messages}
+          workspaceName={ws.name}
+          onReply={handleReply}
+          onDelete={handleDelete}
+        />
       </div>
 
       <div className="border-t p-3">
         <div className="rounded-xl border bg-muted/40 p-3">
+          {replyTo && (
+            <div className="mb-2 rounded-md border border-muted-foreground/20 bg-muted/40 p-2">
+              <div className="mb-1 flex items-center justify-between text-[11px] text-muted-foreground">
+                <span>
+                  Replying to{" "}
+                  {replyTo.role === "user" ? "@You" : replyTo.role === "bot" ? "@Bot" : "user"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setReplyTo(null)}
+                  className="rounded px-1 text-[11px] hover:bg-accent"
+                >
+                  Cancel
+                </button>
+              </div>
+              <div className="border-l-2 border-muted-foreground/40 pl-2 text-[11px] text-muted-foreground">
+                {replyTo.deleted ? (
+                  <span className="italic opacity-70">
+                    original message deleted
+                  </span>
+                ) : (
+                  replyTo.text
+                )}
+              </div>
+            </div>
+          )}
+
           <textarea
             ref={textareaRef}
             value={input}
@@ -1832,7 +1988,12 @@ export default function Page() {
   }, []);
 
   const handleAddMessage = useCallback(
-    (wsId: string, role: Role, text: string) => {
+    (
+      wsId: string,
+      role: Role,
+      text: string,
+      replyToId?: string
+    ) => {
       setWorkspaces((p) =>
         p.map((ws) =>
           ws.id === wsId
@@ -1840,7 +2001,7 @@ export default function Page() {
                 ...ws,
                 messages: [
                   ...ws.messages,
-                  { id: uid(), role, text, time: now() },
+                  { id: uid(), role, text, time: now(), replyToId },
                 ],
               }
             : ws
@@ -1849,6 +2010,22 @@ export default function Page() {
     },
     []
   );
+
+  // Only mark the selected message as deleted; do not delete replies
+  const handleDeleteMessage = useCallback((wsId: string, messageId: string) => {
+    setWorkspaces((prev) =>
+      prev.map((ws) =>
+        ws.id === wsId
+          ? {
+              ...ws,
+              messages: ws.messages.map((m) =>
+                m.id === messageId ? { ...m, deleted: true } : m
+              ),
+            }
+          : ws
+      )
+    );
+  }, []);
 
   const handleAction = useCallback(
     (action: string, id?: string) => {
@@ -1995,8 +2172,8 @@ export default function Page() {
         key: "Home",
         active: homeActive,
         onClick: () => {
-          handleHomeClick();
-          setMobileTopNavOpen(false);
+        handleHomeClick();
+        setMobileTopNavOpen(false);
         },
       },
       {
@@ -2212,6 +2389,7 @@ export default function Page() {
                   <ChatSection
                     ws={activeWs}
                     onAddMessage={handleAddMessage}
+                    onDeleteMessage={handleDeleteMessage}
                     onShowMembers={() => setMembersViewFor(activeWs.id)}
                   />
                 )}
