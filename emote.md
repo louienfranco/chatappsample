@@ -85,6 +85,16 @@ function AnimatedEmote({
   const [inView, setInView] = useState(false);
   const btnRef = useRef<HTMLButtonElement | null>(null);
 
+  // Reset the loaded flag when the resetCounter changes so the image
+  // shows the loading state and restarts animated playback on reopen.
+  // Defer the state update to avoid calling setState synchronously inside
+  // an effect which can trigger cascading renders.
+  useEffect(() => {
+    if (typeof resetCounter === "undefined") return;
+    const t = setTimeout(() => setLoaded(false), 0);
+    return () => clearTimeout(t);
+  }, [resetCounter]);
+
   // Append resetCounter to force the browser to reload the image when the
   // modal is closed and reopened — this resets animated WebP playback.
   const src = `${EMOTE_BASE_URL}/${emote.id}/1x.webp${
@@ -124,6 +134,7 @@ function AnimatedEmote({
     >
       {inView ? (
         <img
+          key={`${emote.id}-${resetCounter ?? 0}`}
           src={src}
           alt={emote.name}
           width={28}
@@ -185,9 +196,10 @@ function EmotePickerButton({ onSelect, children }: EmotePickerButtonProps) {
   });
 
   const handleOpenChange = (value: boolean) => {
-    // When the dialog closes, increment the reset counter so images get a
-    // cache-busting query param on next open and the animated WebP restarts.
-    if (!value) setResetCounter((c) => c + 1);
+    // Increment the reset counter when the dialog opens so images get a
+    // cache-busting query param and the animated WebP restarts each time
+    // the picker is opened without requiring a full page refresh.
+    if (value) setResetCounter((c) => c + 1);
     setOpen(value);
   };
 
@@ -273,10 +285,22 @@ function EmotePickerButton({ onSelect, children }: EmotePickerButtonProps) {
 }
 
 export default function EmoteSelectionPage() {
+  // Prevent server-side rendering for parts that cause hydration mismatches
+  // (some browser/third-party attributes can differ between server and
+  // client). `ClientOnly` renders children only after the component has
+  // mounted on the client, avoiding SSR for `AutoAdd`.
+  function ClientOnly({ children }: { children: React.ReactNode }) {
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
+    return mounted ? <>{children}</> : null;
+  }
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-xl">
-        <AutoAdd />
+        <ClientOnly>
+          <AutoAdd />
+        </ClientOnly>
         <div className="mt-4">
           <EmotePickerButton />
         </div>
