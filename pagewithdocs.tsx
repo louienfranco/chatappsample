@@ -786,7 +786,7 @@ const AddMemberDialog = memo(function AddMemberDialog({
   );
 });
 
-// Profile Section with shadcn Select + "Soon" badges + extra bottom spacing
+// Profile Section
 const ProfileSection = memo(function ProfileSection({
   onRequestLogout,
 }: {
@@ -844,7 +844,6 @@ const ProfileSection = memo(function ProfileSection({
                  [&::-webkit-scrollbar-thumb]:bg-muted-foreground/15
                  [&::-webkit-scrollbar-thumb]:rounded-full"
     >
-      {/* pb-10 so content never touches the bottom */}
       <div className="mx-auto flex h-full w-full max-w-5xl flex-col gap-5 pb-10 lg:flex-row lg:gap-6">
         {/* LEFT COLUMN – profile summary */}
         <div className="w-full max-w-md space-y-4 mx-auto lg:max-w-sm lg:mx-0 lg:shrink-0">
@@ -962,7 +961,7 @@ const ProfileSection = memo(function ProfileSection({
                 </div>
               </div>
 
-              {/* STATUS DROPDOWN (shadcn Select) */}
+              {/* STATUS DROPDOWN */}
               <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">
                   Status
@@ -984,8 +983,7 @@ const ProfileSection = memo(function ProfileSection({
             </div>
           </section>
 
-          {/* Settings list with "Soon" badges */}
-          {/* mb-6 gives extra gap below the last card */}
+          {/* Settings list */}
           <section className="mb-6 rounded-2xl border bg-card p-3 shadow-sm">
             <h2 className="px-1 text-sm font-semibold">Settings</h2>
             <div className="mt-2 space-y-1">
@@ -1003,7 +1001,6 @@ const ProfileSection = memo(function ProfileSection({
                     <p className="text-xs text-muted-foreground">{s.desc}</p>
                   </div>
 
-                  {/* "Soon" badge aligned to the right */}
                   <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                     Soon
                   </span>
@@ -1229,6 +1226,101 @@ function MembersMainSection({
   );
 }
 
+// MessageList – memoized so typing doesn't re-render everything
+interface MessageListProps {
+  messages: Message[];
+  workspaceName: string;
+}
+
+const MessageList = memo(
+  function MessageList({ messages, workspaceName }: MessageListProps) {
+    const [copiedId, setCopiedId] = useState<string | null>(null);
+    const chatRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+      const el = chatRef.current;
+      if (!el) return;
+      requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight;
+      });
+    }, [messages]);
+
+    const copyText = useCallback(async (m: Message) => {
+      try {
+        await navigator.clipboard.writeText(m.text);
+        setCopiedId(m.id);
+        setTimeout(() => setCopiedId(null), 2000);
+      } catch {
+        toast.error("Failed to copy");
+      }
+    }, []);
+
+    return (
+      <div
+        ref={chatRef}
+        className="h-full overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:w-0"
+      >
+        <div className="h-full px-4 py-4">
+          {messages.length === 0 ? (
+            <div className="flex h-full items-center justify-center">
+              <div className="rounded-xl border bg-muted/40 px-4 py-3 text-center">
+                <p className="font-medium">Welcome to {workspaceName}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Send a message to start.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {messages.map((m) => (
+                <div
+                  key={m.id}
+                  className="group flex items-start gap-3 rounded-lg p-2 hover:bg-accent/40"
+                >
+                  <Avatar
+                    name={m.role === "user" ? "You" : "Bot"}
+                    variant={m.role === "user" ? "user" : "bot"}
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-baseline gap-2">
+                      <span
+                        className={`text-sm font-medium ${
+                          m.role === "bot" ? "text-green-600" : ""
+                        }`}
+                      >
+                        {m.role === "user" ? "@You" : "@Bot"}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {m.time}
+                      </span>
+                      {m.role === "bot" && (
+                        <button
+                          onClick={() => copyText(m)}
+                          className="opacity-0 group-hover:opacity-100"
+                        >
+                          {copiedId === m.id ? (
+                            <Check size={12} />
+                          ) : (
+                            <Copy size={12} />
+                          )}
+                        </button>
+                      )}
+                    </div>
+                    <MDFormatting text={m.text} className="mt-0.5" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  },
+  (prev, next) =>
+    prev.messages === next.messages &&
+    prev.workspaceName === next.workspaceName
+);
+
 // Chat Section
 interface ChatSectionProps {
   ws: Workspace;
@@ -1242,46 +1334,39 @@ const ChatSection = memo(function ChatSection({
   onShowMembers,
 }: ChatSectionProps) {
   const [input, setInput] = useState("");
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-  const chatRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => {
-    const el = chatRef.current;
-    if (el)
-      requestAnimationFrame(() => {
-        el.scrollTop = el.scrollHeight;
-      });
-  }, [ws.messages]);
-
-  const handleSend = () => {
-    if (!input.trim()) return;
-    onAddMessage(ws.id, "user", input.trim());
+  const handleSend = useCallback(() => {
+    const trimmed = input.trim();
+    if (!trimmed) return;
+    onAddMessage(ws.id, "user", trimmed);
     setInput("");
     if (textareaRef.current) textareaRef.current.style.height = "auto";
-  };
+  }, [input, onAddMessage, ws.id]);
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey && window.innerWidth >= DESKTOP_BP) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLTextAreaElement>) => {
+      if (
+        e.key === "Enter" &&
+        !e.shiftKey &&
+        typeof window !== "undefined" &&
+        window.innerWidth >= DESKTOP_BP
+      ) {
+        e.preventDefault();
+        handleSend();
+      }
+    },
+    [handleSend]
+  );
 
-  const handleChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
+  const handleChange = useCallback((e: ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
     const el = textareaRef.current;
     if (el) {
       el.style.height = "auto";
       el.style.height = Math.min(el.scrollHeight, 120) + "px";
     }
-  };
-
-  const copyText = async (m: Message) => {
-    await navigator.clipboard.writeText(m.text);
-    setCopiedId(m.id);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
+  }, []);
 
   return (
     <div className="flex h-full flex-col">
@@ -1314,64 +1399,7 @@ const ChatSection = memo(function ChatSection({
       </div>
 
       <div className="flex-1 overflow-hidden">
-        <div
-          ref={chatRef}
-          className="h-full overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:w-0"
-        >
-          <div className="h-full px-4 py-4">
-            {ws.messages.length === 0 ? (
-              <div className="flex h-full items-center justify-center">
-                <div className="rounded-xl border bg-muted/40 px-4 py-3 text-center">
-                  <p className="font-medium">Welcome to {ws.name}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Send a message to start.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {ws.messages.map((m) => (
-                  <div
-                    key={m.id}
-                    className="group flex items-start gap-3 rounded-lg p-2 hover:bg-accent/40"
-                  >
-                    <Avatar
-                      name={m.role === "user" ? "You" : "Bot"}
-                      variant={m.role === "user" ? "user" : "bot"}
-                    />
-                    <div className="flex-1">
-                      <div className="flex items-baseline gap-2">
-                        <span
-                          className={`text-sm font-medium ${
-                            m.role === "bot" ? "text-green-600" : ""
-                          }`}
-                        >
-                          {m.role === "user" ? "@You" : "@Bot"}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {m.time}
-                        </span>
-                        {m.role === "bot" && (
-                          <button
-                            onClick={() => copyText(m)}
-                            className="opacity-0 group-hover:opacity-100"
-                          >
-                            {copiedId === m.id ? (
-                              <Check size={12} />
-                            ) : (
-                              <Copy size={12} />
-                            )}
-                          </button>
-                        )}
-                      </div>
-                      <MDFormatting text={m.text} className="mt-0.5" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+        <MessageList messages={ws.messages} workspaceName={ws.name} />
       </div>
 
       <div className="border-t p-3">
