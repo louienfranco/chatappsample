@@ -612,29 +612,100 @@ const DeleteDialog = memo(function DeleteDialog({
   onConfirm: () => void;
   onClose: () => void;
 }) {
+  // Match the two-step destructive flow used for LeaveDialog so deleting
+  // a workspace requires explicit confirmation from the owner.
+  const [step, setStep] = useState<1 | 2>(1);
+  const [nameInput, setNameInput] = useState("");
+  const [confirmText, setConfirmText] = useState("");
+
+  const step1Valid = nameInput === ws.name;
+  const step2Valid = confirmText === "confirm!";
+
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-xs rounded-xl border bg-background p-4">
         <h2 className="font-semibold">Delete Workspace</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Delete &quot;{ws.name}&quot;? This cannot be undone.
-        </p>
-        <div className="mt-4 flex justify-end gap-2">
-          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            size="sm"
-            onClick={() => {
-              onConfirm();
-              onClose();
-            }}
-          >
-            Delete
-          </Button>
-        </div>
+
+        {step === 1 ? (
+          <>
+            <p className="mt-2 text-sm text-muted-foreground">
+              You are the owner of &quot;{ws.name}&quot;. Deleting will
+              permanently delete this workspace and remove all members — there
+              will be no trace left.
+            </p>
+
+            <p className="mt-3 text-xs text-muted-foreground">
+              Step 1: To proceed, type the workspace name exactly to confirm you
+              understand which workspace will be deleted.
+            </p>
+
+            <input
+              value={nameInput}
+              onChange={(e) => setNameInput(e.target.value)}
+              placeholder={`Type "${ws.name}" to confirm`}
+              className="mt-2 w-full rounded-md border px-2 py-1 text-sm outline-none focus:border-destructive"
+              aria-label={`Type "${ws.name}" to confirm`}
+            />
+
+            <div className="mt-4 flex justify-end gap-2">
+              <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                disabled={!step1Valid}
+                onClick={() => step1Valid && setStep(2)}
+              >
+                Next
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Final confirmation: type{" "}
+              <span className="font-mono">confirm!</span> (lowercase) to
+              permanently delete &quot;{ws.name}&quot; and remove all members.
+            </p>
+
+            <input
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              placeholder={`Type "confirm!" to proceed`}
+              className="mt-2 w-full rounded-md border px-2 py-1 text-sm outline-none focus:border-destructive"
+              aria-label={`Type "confirm!" to finalize deleting workspace`}
+            />
+
+            <div className="mt-4 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setStep(1);
+                  setConfirmText("");
+                }}
+              >
+                Back
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                disabled={!step2Valid}
+                onClick={() => {
+                  if (!step2Valid) return;
+                  onConfirm();
+                  onClose();
+                }}
+              >
+                Delete
+              </Button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -650,30 +721,110 @@ const LeaveDialog = memo(function LeaveDialog({
   onConfirm: () => void;
   onClose: () => void;
 }) {
+  // Two-step confirmation:
+  // Step 1: user types the workspace name exactly to unlock Next.
+  // Step 2: user types `confirm!` (lowercase) to enable the destructive Leave.
+  const [step, setStep] = useState<1 | 2>(1);
+  const [nameInput, setNameInput] = useState("");
+  const [confirmText, setConfirmText] = useState("");
+
+  const step1Valid = nameInput === ws.name;
+  const step2Valid = confirmText === "confirm!";
+
+  useEffect(() => {
+    // reset when dialog closes (optional cleanup)
+    return () => {
+      setStep(1);
+      setNameInput("");
+      setConfirmText("");
+    };
+  }, []);
+
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-xs rounded-xl border bg-background p-4">
         <h2 className="font-semibold">Leave Workspace</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Are you sure you want to leave &quot;{ws.name}&quot;? You will lose
-          access to its messages.
-        </p>
-        <div className="mt-4 flex justify-end gap-2">
-          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            size="sm"
-            onClick={() => {
-              onConfirm();
-              onClose();
-            }}
-          >
-            Leave
-          </Button>
-        </div>
+
+        {step === 1 ? (
+          <>
+            <p className="mt-2 text-sm text-muted-foreground">
+              You are the owner of &quot;{ws.name}&quot;. Leaving will
+              permanently delete this workspace and remove all members — there
+              will be no trace left.
+            </p>
+
+            <p className="mt-3 text-xs text-muted-foreground">
+              Step 1: To proceed, type the workspace name exactly to confirm you
+              understand which workspace will be deleted.
+            </p>
+
+            <input
+              value={nameInput}
+              onChange={(e) => setNameInput(e.target.value)}
+              placeholder={`Type "${ws.name}" to confirm`}
+              className="mt-2 w-full rounded-md border px-2 py-1 text-sm outline-none focus:border-destructive"
+              aria-label={`Type "${ws.name}" to confirm`}
+            />
+
+            <div className="mt-4 flex justify-end gap-2">
+              <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                disabled={!step1Valid}
+                onClick={() => step1Valid && setStep(2)}
+              >
+                Next
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Final confirmation: type{" "}
+              <span className="font-mono">confirm!</span> (lowercase) to
+              permanently delete &quot;{ws.name}&quot; and remove all members.
+            </p>
+
+            <input
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              placeholder={`Type "confirm!" to proceed`}
+              className="mt-2 w-full rounded-md border px-2 py-1 text-sm outline-none focus:border-destructive"
+              aria-label={`Type "confirm!" to finalize leaving workspace`}
+            />
+
+            <div className="mt-4 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setStep(1);
+                  setConfirmText("");
+                }}
+              >
+                Back
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                disabled={!step2Valid}
+                onClick={() => {
+                  if (!step2Valid) return;
+                  onConfirm();
+                  onClose();
+                }}
+              >
+                Leave
+              </Button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
