@@ -330,8 +330,7 @@ export function renderMarkdown(src: string): string {
       )
     );
 
-    // Colored text:
-    // [color=red]...[/color] or hex color
+    // Colored text: [color=red]...[/color] or hex color
     s = s.replace(
       /\[color=([#a-zA-Z0-9]+)\]([\s\S]+?)\[\/color\]/g,
       (_m, rawColor: string, content: string) => {
@@ -434,9 +433,9 @@ export function renderMarkdown(src: string): string {
         )
     );
 
-    // Commit hashes: 7-40 hex chars
+    // Commit hashes: 7-40 hex chars, must contain at least one digit
     s = s.replace(
-      /(^|[\s(])([0-9a-f]{7,40})\b/gi,
+      /(^|[\s(])(?=[0-9a-f]*\d)([0-9a-f]{7,40})\b/gi,
       (_m, pre: string, hash: string) =>
         pre +
         makePlaceholder(
