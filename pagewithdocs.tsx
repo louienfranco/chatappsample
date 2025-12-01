@@ -42,6 +42,7 @@ import {
   ArrowLeft,
   LogOut,
   CornerUpLeft,
+  Pin,
 } from "lucide-react";
 
 import {
@@ -75,6 +76,7 @@ interface Message {
   time: string;
   deleted?: boolean;
   replyToId?: string;
+  pinned?: boolean;
 }
 
 interface Member {
@@ -789,6 +791,42 @@ const AddMemberDialog = memo(function AddMemberDialog({
   );
 });
 
+// Delete Message Dialog
+const DeleteMessageDialog = memo(function DeleteMessageDialog({
+  onConfirm,
+  onClose,
+}: {
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-xs rounded-xl border bg-background p-4">
+        <h2 className="font-semibold">Delete message</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Are you sure you want to delete this message for everyone?
+        </p>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            onClick={() => {
+              onConfirm();
+              onClose();
+            }}
+          >
+            Delete
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+});
+
 // Profile Section
 const ProfileSection = memo(function ProfileSection({
   onRequestLogout,
@@ -990,7 +1028,7 @@ const ProfileSection = memo(function ProfileSection({
           <section className="mb-6 rounded-2xl border bg-card p-3 shadow-sm">
             <h2 className="px-1 text-sm font-semibold">Settings</h2>
             <div className="mt-2 space-y-1">
-              {settings.map((s) => (
+              {SETTINGS.map((s) => (
                 <button
                   key={s.label}
                   type="button"
@@ -1229,12 +1267,106 @@ function MembersMainSection({
   );
 }
 
+// Full-width Pinned Messages view (mobile-like)
+function PinnedMainSection({
+  ws,
+  onBack,
+  onTogglePinMessage,
+}: {
+  ws: Workspace;
+  onBack: () => void;
+  onTogglePinMessage: (messageId: string) => void;
+}) {
+  const pinnedMessages = ws.messages.filter((m) => m.pinned && !m.deleted);
+
+  return (
+    <div className="flex h-full flex-col">
+      <div
+        className={`flex ${HEADER_HEIGHT} items-center justify-between border-b px-4`}
+      >
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onBack}
+            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent"
+            aria-label="Back to chat"
+          >
+            <ArrowLeft size={16} />
+          </button>
+          <span className="text-sm font-semibold">Pinned · {ws.name}</span>
+        </div>
+      </div>
+
+      <div
+        className="flex-1 overflow-y-auto p-3
+                   [scrollbar-gutter:stable]
+                   [scrollbar-width:thin]
+                   [scrollbar-color:rgba(148,163,184,0.15)_transparent]
+                   [&::-webkit-scrollbar]:w-1.5
+                   [&::-webkit-scrollbar-track]:bg-transparent
+                   [&::-webkit-scrollbar-track-piece]:bg-transparent
+                   [&::-webkit-scrollbar-corner]:bg-transparent
+                   [&::-webkit-scrollbar-button]:hidden
+                   [&::-webkit-scrollbar-thumb]:bg-muted-foreground/15
+                   [&::-webkit-scrollbar-thumb]:rounded-full"
+      >
+        <div className="mx-auto w-full max-w-lg space-y-2">
+          {pinnedMessages.length === 0 ? (
+            <div className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
+              No pinned messages yet.
+            </div>
+          ) : (
+            pinnedMessages.map((m) => {
+              const displayName = m.role === "user" ? "@You" : "@Bot";
+              return (
+                <div
+                  key={m.id}
+                  className="rounded-lg border bg-muted/40 p-2 text-xs"
+                >
+                  <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <span
+                        className={
+                          m.role === "bot"
+                            ? "font-medium text-green-600"
+                            : "font-medium"
+                        }
+                      >
+                        {displayName}
+                      </span>
+                      <span>•</span>
+                      <span>{m.time}</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onTogglePinMessage(m.id)}
+                      className="flex h-5 w-5 items-center justify-center rounded-md hover:bg-accent"
+                      aria-label="Unpin"
+                      title="Unpin"
+                    >
+                      <Pin size={11} />
+                    </button>
+                  </div>
+                  <div className="mt-1 text-xs">
+                    <MDFormatting text={m.text} />
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // MessageList – memoized so typing doesn't re-render everything
 interface MessageListProps {
   messages: Message[];
   workspaceName: string;
   onReply: (message: Message) => void;
-  onDelete: (messageId: string) => void;
+  onDeleteRequest: (messageId: string) => void;
+  onPinToggle: (messageId: string) => void;
 }
 
 const MessageList = memo(
@@ -1242,10 +1374,10 @@ const MessageList = memo(
     messages,
     workspaceName,
     onReply,
-    onDelete,
+    onDeleteRequest,
+    onPinToggle,
   }: MessageListProps) {
     const [copiedId, setCopiedId] = useState<string | null>(null);
-    const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
     const chatRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -1264,10 +1396,6 @@ const MessageList = memo(
       } catch {
         toast.error("Failed to copy");
       }
-    }, []);
-
-    const toggleMenu = useCallback((id: string) => {
-      setMenuOpenId((prev) => (prev === id ? null : id));
     }, []);
 
     return (
@@ -1293,6 +1421,7 @@ const MessageList = memo(
                   ? messages.find((mm) => mm.id === m.replyToId)
                   : undefined;
 
+                const displayName = m.role === "user" ? "@You" : "@Bot";
                 const repliedToLabel =
                   repliedTo?.role === "user"
                     ? "@You"
@@ -1310,75 +1439,28 @@ const MessageList = memo(
                       variant={m.role === "user" ? "user" : "bot"}
                     />
                     <div className="flex-1">
-                      <div className="flex items-baseline gap-2">
+                      {/* @username • time (+ pinned badge) */}
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
                         <span
-                          className={`text-sm font-medium ${
-                            m.role === "bot" ? "text-green-600" : ""
-                          }`}
+                          className={
+                            m.role === "bot"
+                              ? "font-medium text-green-600"
+                              : "font-medium"
+                          }
                         >
-                          {m.role === "user" ? "@You" : "@Bot"}
+                          {displayName}
                         </span>
-                        <div className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
-                          <span>{m.time}</span>
-                          {!isDeleted && (
-                            <button
-                              type="button"
-                              onClick={() => toggleMenu(m.id)}
-                              className="flex h-5 w-5 items-center justify-center rounded-md hover:bg-accent"
-                              aria-label="Message options"
-                            >
-                              <ChevronDown size={12} />
-                            </button>
-                          )}
-                        </div>
+                        <span>•</span>
+                        <span>{m.time}</span>
+                        {m.pinned && (
+                          <span className="ml-1 inline-flex items-center gap-0.5 rounded-full bg-yellow-100 px-1 text-[10px] font-medium text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-300">
+                            <Pin size={10} />
+                            Pinned
+                          </span>
+                        )}
                       </div>
 
-                      {menuOpenId === m.id && !isDeleted && (
-                        <div className="mt-1 flex gap-1 text-muted-foreground">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              onReply(m);
-                              setMenuOpenId(null);
-                            }}
-                            className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-accent"
-                            aria-label="Reply"
-                            title="Reply"
-                          >
-                            <CornerUpLeft size={12} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              await copyText(m);
-                              setMenuOpenId(null);
-                            }}
-                            className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-accent"
-                            aria-label="Copy"
-                            title="Copy"
-                          >
-                            {copiedId === m.id ? (
-                              <Check size={12} />
-                            ) : (
-                              <Copy size={12} />
-                            )}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              onDelete(m.id);
-                              setMenuOpenId(null);
-                            }}
-                            className="flex h-6 w-6 items-center justify-center rounded-md text-destructive hover:bg-destructive/10"
-                            aria-label="Delete for everyone"
-                            title="Delete for everyone"
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Reply header: always show who we replied to, even if original deleted */}
+                      {/* Reply header */}
                       {!isDeleted && repliedTo && repliedToLabel && (
                         <div className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
                           <CornerUpLeft size={10} />
@@ -1401,12 +1483,63 @@ const MessageList = memo(
                           </div>
                         )}
 
+                      {/* Main message body or deleted indicator */}
                       {isDeleted ? (
                         <p className="mt-0.5 text-xs italic text-muted-foreground">
                           deleted message
                         </p>
                       ) : (
                         <MDFormatting text={m.text} className="mt-0.5" />
+                      )}
+
+                      {/* Actions row: reply / copy / pin / delete */}
+                      {!isDeleted && (
+                        <div className="mt-1 flex gap-1 text-muted-foreground">
+                          <button
+                            type="button"
+                            onClick={() => onReply(m)}
+                            className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-accent"
+                            aria-label="Reply"
+                            title="Reply"
+                          >
+                            <CornerUpLeft size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              await copyText(m);
+                            }}
+                            className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-accent"
+                            aria-label="Copy"
+                            title="Copy"
+                          >
+                            {copiedId === m.id ? (
+                              <Check size={12} />
+                            ) : (
+                              <Copy size={12} />
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onPinToggle(m.id)}
+                            className={`flex h-6 w-6 items-center justify-center rounded-md hover:bg-accent ${
+                              m.pinned ? "text-primary" : ""
+                            }`}
+                            aria-label={m.pinned ? "Unpin" : "Pin"}
+                            title={m.pinned ? "Unpin" : "Pin"}
+                          >
+                            <Pin size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDeleteRequest(m.id)}
+                            className="flex h-6 w-6 items-center justify-center rounded-md text-destructive hover:bg-destructive/10"
+                            aria-label="Delete for everyone"
+                            title="Delete for everyone"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -1432,15 +1565,19 @@ interface ChatSectionProps {
     text: string,
     replyToId?: string
   ) => void;
-  onDeleteMessage: (wsId: string, messageId: string) => void;
+  onRequestDeleteMessage: (wsId: string, messageId: string) => void;
+  onTogglePinMessage: (wsId: string, messageId: string) => void;
   onShowMembers?: () => void;
+  onShowPinned?: () => void;
 }
 
 const ChatSection = memo(function ChatSection({
   ws,
   onAddMessage,
-  onDeleteMessage,
+  onRequestDeleteMessage,
+  onTogglePinMessage,
   onShowMembers,
+  onShowPinned,
 }: ChatSectionProps) {
   const [input, setInput] = useState("");
   const [replyTo, setReplyTo] = useState<Message | null>(null);
@@ -1451,11 +1588,18 @@ const ChatSection = memo(function ChatSection({
     if (textareaRef.current) textareaRef.current.focus();
   }, []);
 
-  const handleDelete = useCallback(
+  const handleDeleteRequest = useCallback(
     (messageId: string) => {
-      onDeleteMessage(ws.id, messageId);
+      onRequestDeleteMessage(ws.id, messageId);
     },
-    [onDeleteMessage, ws.id]
+    [onRequestDeleteMessage, ws.id]
+  );
+
+  const handlePinToggle = useCallback(
+    (messageId: string) => {
+      onTogglePinMessage(ws.id, messageId);
+    },
+    [onTogglePinMessage, ws.id]
   );
 
   const handleSend = useCallback(() => {
@@ -1507,8 +1651,20 @@ const ChatSection = memo(function ChatSection({
             </span>
           )}
         </div>
-        <span className="flex items-center gap-1.5 text-xs text-green-600">
-          <span className="h-1.5 w-1.5 rounded-full bg-green-500" /> Online
+        <div className="flex items-center gap-1.5 text-xs text-green-600">
+          <span className="flex items-center gap-1.5">
+            <span className="h-1.5 w-1.5 rounded-full bg-green-500" /> Online
+          </span>
+          {onShowPinned && (
+            <button
+              type="button"
+              onClick={onShowPinned}
+              className="ml-1 flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent"
+              aria-label="View pinned messages"
+            >
+              <Pin size={14} />
+            </button>
+          )}
           {onShowMembers && (
             <button
               type="button"
@@ -1519,7 +1675,7 @@ const ChatSection = memo(function ChatSection({
               <UserSearch size={14} />
             </button>
           )}
-        </span>
+        </div>
       </div>
 
       <div className="flex-1 overflow-hidden">
@@ -1527,7 +1683,8 @@ const ChatSection = memo(function ChatSection({
           messages={ws.messages}
           workspaceName={ws.name}
           onReply={handleReply}
-          onDelete={handleDelete}
+          onDeleteRequest={handleDeleteRequest}
+          onPinToggle={handlePinToggle}
         />
       </div>
 
@@ -1538,7 +1695,11 @@ const ChatSection = memo(function ChatSection({
               <div className="mb-1 flex items-center justify-between text-[11px] text-muted-foreground">
                 <span>
                   Replying to{" "}
-                  {replyTo.role === "user" ? "@You" : replyTo.role === "bot" ? "@Bot" : "user"}
+                  {replyTo.role === "user"
+                    ? "@You"
+                    : replyTo.role === "bot"
+                    ? "@Bot"
+                    : "user"}
                 </span>
                 <button
                   type="button"
@@ -1945,7 +2106,14 @@ export default function Page() {
     id: string;
   } | null>(null);
 
+  const [messageDialog, setMessageDialog] = useState<{
+    wsId: string;
+    messageId: string;
+  } | null>(null);
+
   const [membersViewFor, setMembersViewFor] = useState<string | null>(null);
+  const [pinnedViewFor, setPinnedViewFor] = useState<string | null>(null);
+
   const resizeTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -1988,12 +2156,7 @@ export default function Page() {
   }, []);
 
   const handleAddMessage = useCallback(
-    (
-      wsId: string,
-      role: Role,
-      text: string,
-      replyToId?: string
-    ) => {
+    (wsId: string, role: Role, text: string, replyToId?: string) => {
       setWorkspaces((p) =>
         p.map((ws) =>
           ws.id === wsId
@@ -2026,6 +2189,24 @@ export default function Page() {
       )
     );
   }, []);
+
+  const handleTogglePinMessage = useCallback(
+    (wsId: string, messageId: string) => {
+      setWorkspaces((prev) =>
+        prev.map((ws) =>
+          ws.id === wsId
+            ? {
+                ...ws,
+                messages: ws.messages.map((m) =>
+                  m.id === messageId ? { ...m, pinned: !m.pinned } : m
+                ),
+              }
+            : ws
+        )
+      );
+    },
+    []
+  );
 
   const handleAction = useCallback(
     (action: string, id?: string) => {
@@ -2063,11 +2244,12 @@ export default function Page() {
     setWorkspaces((p) => p.map((ws) => (ws.id === id ? { ...ws, name } : ws)));
   }, []);
 
-  const handleDelete = useCallback(
+  const handleDeleteWorkspace = useCallback(
     (id: string) => {
       setWorkspaces((p) => p.filter((ws) => ws.id !== id));
       if (active === id) setActive("empty");
       setMembersViewFor((cur) => (cur === id ? null : cur));
+      setPinnedViewFor((cur) => (cur === id ? null : cur));
     },
     [active]
   );
@@ -2130,6 +2312,7 @@ export default function Page() {
       }
 
       setMembersViewFor((cur) => (cur === wsId ? null : cur));
+      setPinnedViewFor((cur) => (cur === wsId ? null : cur));
 
       toast.success(`You left "${ws.name}"`);
     },
@@ -2172,8 +2355,8 @@ export default function Page() {
         key: "Home",
         active: homeActive,
         onClick: () => {
-        handleHomeClick();
-        setMobileTopNavOpen(false);
+          handleHomeClick();
+          setMobileTopNavOpen(false);
         },
       },
       {
@@ -2374,7 +2557,15 @@ export default function Page() {
           {activeWs && (
             <div className="flex h-full">
               <div className="min-w-0 flex-1">
-                {membersViewFor === activeWs.id ? (
+                {pinnedViewFor === activeWs.id ? (
+                  <PinnedMainSection
+                    ws={activeWs}
+                    onBack={() => setPinnedViewFor(null)}
+                    onTogglePinMessage={(messageId) =>
+                      handleTogglePinMessage(activeWs.id, messageId)
+                    }
+                  />
+                ) : membersViewFor === activeWs.id ? (
                   <MembersMainSection
                     ws={activeWs}
                     onBack={() => setMembersViewFor(null)}
@@ -2389,8 +2580,12 @@ export default function Page() {
                   <ChatSection
                     ws={activeWs}
                     onAddMessage={handleAddMessage}
-                    onDeleteMessage={handleDeleteMessage}
+                    onRequestDeleteMessage={(wsId, messageId) =>
+                      setMessageDialog({ wsId, messageId })
+                    }
+                    onTogglePinMessage={handleTogglePinMessage}
                     onShowMembers={() => setMembersViewFor(activeWs.id)}
+                    onShowPinned={() => setPinnedViewFor(activeWs.id)}
                   />
                 )}
               </div>
@@ -2420,7 +2615,7 @@ export default function Page() {
         <DeleteDialog
           ws={dialogWs}
           onConfirm={() => {
-            handleDelete(dialogWs.id);
+            handleDeleteWorkspace(dialogWs.id);
             toast.success(`Deleted workspace "${dialogWs.name}"`);
           }}
           onClose={() => setDialog(null)}
@@ -2446,6 +2641,15 @@ export default function Page() {
             toast.success("Logged out");
           }}
           onClose={() => setDialog(null)}
+        />
+      )}
+
+      {messageDialog && (
+        <DeleteMessageDialog
+          onConfirm={() =>
+            handleDeleteMessage(messageDialog.wsId, messageDialog.messageId)
+          }
+          onClose={() => setMessageDialog(null)}
         />
       )}
     </div>
