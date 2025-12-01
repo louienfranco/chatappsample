@@ -606,13 +606,30 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
+  const { data: profile, error: profileError } = await supabase
+    .from("user_profiles")
+    .select("username, verified, verified_at")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (profileError) {
+    // You might log this somewhere, but don't break the page
+    console.error("Failed to load user profile:", profileError.message);
+  }
+
   const meta = (user.user_metadata || {}) as {
     username?: string;
     display_name?: string;
   };
 
+  const username = profile?.username ?? meta.username ?? "(not set)";
+  const isVerified = profile?.verified === true;
+
   const display =
-    meta.display_name || meta.username || user.email || "Unknown user";
+    meta.display_name ||
+    username ||
+    user.email ||
+    "Unknown user";
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-gradient-to-b from-background via-muted/40 to-background px-4">
@@ -620,8 +637,20 @@ export default async function DashboardPage() {
         <Card className="border-border/70 bg-card/95 shadow-sm backdrop-blur">
           <CardHeader>
             <div className="flex items-center justify-between gap-2">
-              <div>
-                <CardTitle className="text-lg">Dashboard</CardTitle>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-lg">Dashboard</CardTitle>
+                  <span
+                    className={
+                      "rounded-full border px-2 py-[2px] text-[10px] font-medium " +
+                      (isVerified
+                        ? "border-blue-500/40 bg-blue-500/10 text-blue-600"
+                        : "border-muted-foreground/30 bg-muted/40 text-muted-foreground")
+                    }
+                  >
+                    {isVerified ? "Verified account" : "Standard account"}
+                  </span>
+                </div>
                 <CardDescription className="text-xs">
                   Welcome back,{" "}
                   <span className="font-semibold text-foreground">
@@ -637,7 +666,7 @@ export default async function DashboardPage() {
             <p>
               Username:{" "}
               <span className="font-medium">
-                {meta.username ?? "(not set)"}
+                {username}
               </span>
             </p>
             <p>
@@ -646,44 +675,16 @@ export default async function DashboardPage() {
                 {user.email ?? "(no email)"}
               </span>
             </p>
+            {profile?.verified_at && (
+              <p className="text-[11px] text-muted-foreground">
+                Verified at:{" "}
+                {new Date(profile.verified_at).toLocaleString()}
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>
     </main>
-  );
-}
-```
-
-```tsx
-// app/dashboard/LogoutButton.tsx
-"use client";
-
-import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-
-export default function LogoutButton() {
-  const router = useRouter();
-  const supabase = createClient();
-
-  const handleLogout = async () => {
-    const { error } = await supabase.auth.signOut();
-
-    if (error) {
-      toast.error(error.message || "Failed to log out.");
-      return;
-    }
-
-    toast.success("Logged out successfully.");
-    router.push("/login");
-    router.refresh();
-  };
-
-  return (
-    <Button variant="outline" size="sm" onClick={handleLogout}>
-      Logout
-    </Button>
   );
 }
 ```
