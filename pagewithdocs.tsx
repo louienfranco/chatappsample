@@ -1530,15 +1530,17 @@ const MessageList = memo(
                           >
                             <Pin size={12} />
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => onDeleteRequest(m.id)}
-                            className="flex h-6 w-6 items-center justify-center rounded-md text-destructive hover:bg-destructive/10"
-                            aria-label="Delete for everyone"
-                            title="Delete for everyone"
-                          >
-                            <Trash2 size={12} />
-                          </button>
+                          {m.role === "user" && (
+                            <button
+                              type="button"
+                              onClick={() => onDeleteRequest(m.id)}
+                              className="flex h-6 w-6 items-center justify-center rounded-md text-destructive hover:bg-destructive/10"
+                              aria-label="Delete for everyone"
+                              title="Delete for everyone"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1552,8 +1554,7 @@ const MessageList = memo(
     );
   },
   (prev, next) =>
-    prev.messages === next.messages &&
-    prev.workspaceName === next.workspaceName
+    prev.messages === next.messages && prev.workspaceName === next.workspaceName
 );
 
 // Chat Section
@@ -2174,19 +2175,26 @@ export default function Page() {
     []
   );
 
-  // Only mark the selected message as deleted; do not delete replies
+  // Only mark the selected message as deleted; do not delete replies.
+  // Guard: only allow deleting messages sent by the local user (role === 'user').
   const handleDeleteMessage = useCallback((wsId: string, messageId: string) => {
     setWorkspaces((prev) =>
-      prev.map((ws) =>
-        ws.id === wsId
-          ? {
-              ...ws,
-              messages: ws.messages.map((m) =>
-                m.id === messageId ? { ...m, deleted: true } : m
-              ),
-            }
-          : ws
-      )
+      prev.map((ws) => {
+        if (ws.id !== wsId) return ws;
+        const target = ws.messages.find((m) => m.id === messageId);
+        if (!target) return ws;
+        if (target.role !== "user") {
+          toast.error("You can only delete your own messages");
+          return ws;
+        }
+
+        return {
+          ...ws,
+          messages: ws.messages.map((m) =>
+            m.id === messageId ? { ...m, deleted: true } : m
+          ),
+        };
+      })
     );
   }, []);
 
@@ -2580,9 +2588,15 @@ export default function Page() {
                   <ChatSection
                     ws={activeWs}
                     onAddMessage={handleAddMessage}
-                    onRequestDeleteMessage={(wsId, messageId) =>
-                      setMessageDialog({ wsId, messageId })
-                    }
+                    onRequestDeleteMessage={(wsId, messageId) => {
+                      const ws = workspaces.find((w) => w.id === wsId);
+                      const m = ws?.messages.find((mm) => mm.id === messageId);
+                      if (m?.role === "user") {
+                        setMessageDialog({ wsId, messageId });
+                      } else {
+                        toast.error("You can only delete your own messages");
+                      }
+                    }}
                     onTogglePinMessage={handleTogglePinMessage}
                     onShowMembers={() => setMembersViewFor(activeWs.id)}
                     onShowPinned={() => setPinnedViewFor(activeWs.id)}
