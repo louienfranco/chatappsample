@@ -168,9 +168,8 @@ export function renderMarkdown(src: string): string {
     s = s.replace(/\n/g, () => makePlaceholder('<br class="block" />'));
 
     // Escapes: \* \# \_ etc.
-    s = s.replace(
-      /\\([\\`*_{}\[\]()#+\-.!|>~:=])/g,
-      (_m, ch: string) => makePlaceholder(escapeHtml(ch))
+    s = s.replace(/\\([\\`*_{}\[\]()#+\-.!|>~:=])/g, (_m, ch: string) =>
+      makePlaceholder(escapeHtml(ch))
     );
 
     // Code spans: `code`
@@ -183,16 +182,14 @@ export function renderMarkdown(src: string): string {
     );
 
     // Autolinks with angle brackets: <https://...>, <email@example.com>
-    s = s.replace(
-      /<((?:https?|ftp):\/\/[^>]+)>/g,
-      (_m, url: string) =>
-        makePlaceholder(
-          `<a href="${escapeHtmlAttr(
-            url
-          )}" target="_blank" rel="noreferrer" class="text-primary underline-offset-2 hover:underline">${escapeHtml(
-            url
-          )}</a>`
-        )
+    s = s.replace(/<((?:https?|ftp):\/\/[^>]+)>/g, (_m, url: string) =>
+      makePlaceholder(
+        `<a href="${escapeHtmlAttr(
+          url
+        )}" target="_blank" rel="noreferrer" class="text-primary underline-offset-2 hover:underline">${escapeHtml(
+          url
+        )}</a>`
+      )
     );
 
     s = s.replace(
@@ -287,10 +284,10 @@ export function renderMarkdown(src: string): string {
       );
     });
 
-    // Highlight: ==text==
+    // Highlight: ==text== — ensure highlight text uses the foreground color
     s = s.replace(/==([^=]+)==/g, (_m, content: string) =>
       makePlaceholder(
-        `<mark class="rounded bg-yellow-200/70 px-0.5 dark:bg-yellow-500/40">${escapeHtml(
+        `<mark class="rounded bg-yellow-200/70 px-0.5 dark:bg-yellow-500/40 text-foreground">${escapeHtml(
           content
         )}</mark>`
       )
@@ -317,17 +314,13 @@ export function renderMarkdown(src: string): string {
     );
 
     // Italic: *text* or _text_
-    s = s.replace(
-      /(\*|_)([^]+?)\1/g,
-      (_m, _wrapper: string, content: string) =>
-        makePlaceholder(`<em class="italic">${escapeHtml(content)}</em>`)
+    s = s.replace(/(\*|_)([^]+?)\1/g, (_m, _wrapper: string, content: string) =>
+      makePlaceholder(`<em class="italic">${escapeHtml(content)}</em>`)
     );
 
     // Strikethrough: ~~text~~
     s = s.replace(/~~([^~]+)~~/g, (_m, content: string) =>
-      makePlaceholder(
-        `<del class="opacity-70">${escapeHtml(content)}</del>`
-      )
+      makePlaceholder(`<del class="opacity-70">${escapeHtml(content)}</del>`)
     );
 
     // Colored text: [color=red]...[/color] or hex color
@@ -358,9 +351,9 @@ export function renderMarkdown(src: string): string {
         if (hexMatch) {
           const hex = `#${hexMatch[1]}`;
           return makePlaceholder(
-            `<span style="color:${escapeHtmlAttr(
-              hex
-            )}">${renderInline(content)}</span>`
+            `<span style="color:${escapeHtmlAttr(hex)}">${renderInline(
+              content
+            )}</span>`
           );
         }
 
@@ -601,9 +594,7 @@ export function renderMarkdown(src: string): string {
         // any new list item (same or deeper) ends this item's paragraph
         if (mm) break;
 
-        itemLines.push(
-          l.replace(new RegExp(`^\\s{0,${baseIndent + 2}}`), "")
-        );
+        itemLines.push(l.replace(new RegExp(`^\\s{0,${baseIndent + 2}}`), ""));
         i++;
       }
 
@@ -806,9 +797,7 @@ export function renderMarkdown(src: string): string {
           items.push(
             `<dt class="font-medium text-xs text-muted-foreground uppercase tracking-wide">${renderInline(
               d[1].trim()
-            )}</dt><dd class="ml-3 text-sm">${renderInline(
-              d[2].trim()
-            )}</dd>`
+            )}</dt><dd class="ml-3 text-sm">${renderInline(d[2].trim())}</dd>`
           );
           i++;
         }
