@@ -15,33 +15,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS user_profiles_username_ci_unique
 ```
 
 ```sql
--- Enable RLS on user_profiles
-ALTER TABLE IF EXISTS public.user_profiles ENABLE ROW LEVEL SECURITY;
-
--- Policy: allow authenticated users to SELECT their own profile
-CREATE POLICY IF NOT EXISTS "user_profiles_select_self" ON public.user_profiles
-  FOR SELECT
-  TO authenticated
-  USING ( user_id = auth.uid() );
-
--- Policy: allow authenticated users to INSERT their own profile (sign-up)
-CREATE POLICY IF NOT EXISTS "user_profiles_insert_self" ON public.user_profiles
-  FOR INSERT
-  TO authenticated
-  WITH CHECK ( user_id = auth.uid() );
-
--- Policy: allow authenticated users to UPDATE only non-verified fields on their own profile
-CREATE POLICY IF NOT EXISTS "user_profiles_update_self" ON public.user_profiles
-  FOR UPDATE
-  TO authenticated
-  USING ( user_id = auth.uid() )
-  WITH CHECK ( user_id = auth.uid() AND verified IS NOT TRUE );
-
--- Policy: Prevent clients from setting verified=true (only service role / Edge Function should)
--- We allow service_role (bypasses RLS) to update verified. No policy needed for service_role.
-```
-
-```sql
 -- Function to create a profile for every new auth user
 create or replace function public.handle_new_user_profile()
 returns trigger
