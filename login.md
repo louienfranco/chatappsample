@@ -1,11 +1,10 @@
-Keep your existing `lib/supabase/server.ts` exactly as you posted.  
-Below is everything else you asked for, adjusted to work with that async `createClient()`.
+# Auth & Supabase Reference
 
----
+This file lists key auth-related files in the project with their current contents for quick reference.
 
-## 1. `lib/supabase/client.ts`
+1. `lib/supabase/client.ts`
 
-```ts
+```typescript
 // lib/supabase/client.ts
 import { createBrowserClient } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -24,14 +23,12 @@ export function createClient(): SupabaseClient {
 }
 ```
 
----
+2. `lib/supabase/server.ts`
 
-## 2. `lib/supabase/server.ts` (use exactly what you posted)
-
-```ts
+```typescript
 // lib/supabase/server.ts
-import { cookies } from 'next/headers';
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { cookies } from "next/headers";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 
 export async function createClient() {
   // In your Next version, cookies() returns a Promise
@@ -49,90 +46,15 @@ export async function createClient() {
           cookieStore.set({ name, value, ...options });
         },
         remove(name: string, options: CookieOptions) {
-          cookieStore.set({ name, value: '', ...options });
+          cookieStore.set({ name, value: "", ...options });
         },
       },
-    },
+    }
   );
 }
 ```
 
-Note: Because this `createClient` is `async`, every server component/page must `await createClient()`.
-
----
-
-## 3. `app/page.tsx` (home)
-
-```tsx
-// app/page.tsx
-import Link from "next/link";
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { Button } from "@/components/ui/button";
-
-export default async function HomePage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (user) {
-    redirect("/dashboard");
-  }
-
-  return (
-    <main className="flex min-h-screen items-center justify-center bg-gradient-to-b from-background via-muted/40 to-background px-4">
-      <div className="w-full max-w-md space-y-4 text-center">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-primary/80">
-          Supabase Auth
-        </p>
-        <h1 className="text-xl font-semibold tracking-tight">
-          Minimal Auth Demo
-        </h1>
-        <p className="text-xs text-muted-foreground">
-          Sign in or create an account to access your dashboard.
-        </p>
-        <div className="mt-2 flex justify-center gap-2">
-          <Button asChild size="sm">
-            <Link href="/login">Sign in</Link>
-          </Button>
-          <Button asChild variant="outline" size="sm">
-            <Link href="/register">Register</Link>
-          </Button>
-        </div>
-      </div>
-    </main>
-  );
-}
-```
-
----
-
-## 4. Login
-
-### `app/login/page.tsx` (server)
-
-```tsx
-// app/login/page.tsx
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import LoginForm from "./LoginForm";
-
-export default async function LoginPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (user) {
-    redirect("/dashboard");
-  }
-
-  return <LoginForm />;
-}
-```
-
-### `app/login/LoginForm.tsx` (client)
+3. `app/login/LoginForm.tsx`
 
 ```tsx
 // app/login/LoginForm.tsx
@@ -283,33 +205,7 @@ export default function LoginForm() {
 }
 ```
 
----
-
-## 5. Register
-
-### `app/register/page.tsx` (server)
-
-```tsx
-// app/register/page.tsx
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import RegisterForm from "./RegisterForm";
-
-export default async function RegisterPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (user) {
-    redirect("/dashboard");
-  }
-
-  return <RegisterForm />;
-}
-```
-
-### `app/register/RegisterForm.tsx` (client, 2-step)
+4. `app/register/RegisterForm.tsx`
 
 ```tsx
 // app/register/RegisterForm.tsx
@@ -378,6 +274,7 @@ export default function RegisterForm() {
       email,
       password,
       options: {
+        // The DB trigger reads this as raw_user_meta_data->>'username'
         data: {
           username,
           display_name: displayName,
@@ -387,11 +284,34 @@ export default function RegisterForm() {
 
     if (error) {
       setLoading(false);
+
+      const msg = (error.message || "").toLowerCase();
+
+      // Email already used
+      if (msg.includes("already registered")) {
+        toast.error(
+          "This email is already registered. Please sign in instead."
+        );
+        return;
+      }
+
+      // DB error from trigger (e.g. username uniqueness failure)
+      if (msg.includes("database error saving new user")) {
+        toast.error(
+          "That username is already taken. Please choose another one."
+        );
+        return;
+      }
+
       toast.error(error.message || "Failed to register.");
       return;
     }
 
-    if (!data.user) {
+    const { user, session } = data;
+
+    // If email confirmations are enabled, you may have user but no session.
+    // The profile has already been created by the trigger if signup succeeded.
+    if (!user || !session) {
       setLoading(false);
       toast.success(
         "Registration succeeded. Please check your email to confirm your account."
@@ -399,6 +319,7 @@ export default function RegisterForm() {
       return;
     }
 
+    setLoading(false);
     toast.success("Registered successfully! You can now sign in.");
     router.push("/login");
     router.refresh();
@@ -425,7 +346,8 @@ export default function RegisterForm() {
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between text-[11px] text-muted-foreground">
               <span className="font-medium">
-                Step {step} <span className="text-muted-foreground/70">of 2</span>
+                Step {step}{" "}
+                <span className="text-muted-foreground/70">of 2</span>
               </span>
               <span>{step === 1 ? "Basic info" : "Account details"}</span>
             </div>
@@ -434,7 +356,7 @@ export default function RegisterForm() {
             </CardTitle>
             <CardDescription className="text-[11px]">
               {step === 1
-                ? "Pick a username and a name. You can change these later."
+                ? "Pick a username and a name. Usernames are unique (case-insensitive)."
                 : "Use a valid email address and a secure password."}
             </CardDescription>
           </CardHeader>
@@ -456,6 +378,9 @@ export default function RegisterForm() {
                       required
                       className="h-9 text-sm"
                     />
+                    <p className="mt-0.5 text-[10px] text-muted-foreground">
+                      This will be your unique handle.
+                    </p>
                   </div>
 
                   <div className="space-y-1">
@@ -531,7 +456,6 @@ export default function RegisterForm() {
               <div className="grid grid-cols-2 gap-2 pt-2">
                 {step === 1 ? (
                   <>
-                    {/* left blank */}
                     <span />
                     <Button
                       type="button"
@@ -581,84 +505,7 @@ export default function RegisterForm() {
 }
 ```
 
----
-
-## 6. Dashboard
-
-### `app/dashboard/page.tsx` (server)
-
-```tsx
-// app/dashboard/page.tsx
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import LogoutButton from "./LogoutButton";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from "@/components/ui/card";
-
-export default async function DashboardPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
-
-  const meta = (user.user_metadata || {}) as {
-    username?: string;
-    display_name?: string;
-  };
-
-  const display =
-    meta.display_name || meta.username || user.email || "Unknown user";
-
-  return (
-    <main className="flex min-h-screen items-center justify-center bg-gradient-to-b from-background via-muted/40 to-background px-4">
-      <div className="w-full max-w-lg">
-        <Card className="border-border/70 bg-card/95 shadow-sm backdrop-blur">
-          <CardHeader>
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <CardTitle className="text-lg">Dashboard</CardTitle>
-                <CardDescription className="text-xs">
-                  Welcome back,{" "}
-                  <span className="font-semibold text-foreground">
-                    {display}
-                  </span>
-                  .
-                </CardDescription>
-              </div>
-              <LogoutButton />
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm text-muted-foreground">
-            <p>
-              Username:{" "}
-              <span className="font-medium">
-                {meta.username ?? "(not set)"}
-              </span>
-            </p>
-            <p>
-              Email:{" "}
-              <span className="font-medium">
-                {user.email ?? "(no email)"}
-              </span>
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    </main>
-  );
-}
-```
-
-### `app/dashboard/LogoutButton.tsx` (client)
+5. `app/dashboard/LogoutButton.tsx`
 
 ```tsx
 // app/dashboard/LogoutButton.tsx
@@ -694,5 +541,79 @@ export default function LogoutButton() {
 }
 ```
 
-All server-side uses of `createClient` now correctly `await` your async helper.  
-If you see any specific TS error, paste it with the file/line and I’ll fix it.
+6. `db.sql`
+
+```sql
+-- 1) App-level user_profiles table (store canonical username and verified flag)
+CREATE TABLE IF NOT EXISTS public.user_profiles (
+  user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  username text,
+  username_ci text GENERATED ALWAYS AS (lower(username)) STORED,
+  verified boolean DEFAULT false,
+  verified_at timestamptz
+);
+
+-- 2) Unique index on case-insensitive username
+CREATE UNIQUE INDEX IF NOT EXISTS user_profiles_username_ci_unique
+  ON public.user_profiles(username_ci)
+  WHERE username IS NOT NULL;
+
+
+-- Optional: use the citext extension for simpler case-insensitive usernames
+-- Uncomment and run these lines (once) if you prefer citext instead of the generated column + partial index.
+-- CREATE EXTENSION IF NOT EXISTS citext;
+-- ALTER TABLE public.user_profiles ALTER COLUMN username TYPE citext USING username::citext;
+-- ALTER TABLE public.user_profiles ADD CONSTRAINT user_profiles_username_unique UNIQUE (username);
+-- If you want to require usernames (no NULLs):
+-- ALTER TABLE public.user_profiles ALTER COLUMN username SET NOT NULL;
+-- Function to create a profile for every new auth user
+create or replace function public.handle_new_user_profile()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  raw_username text;
+begin
+  -- Read username from auth.user's raw_user_meta_data
+  raw_username := nullif(trim(new.raw_user_meta_data->>'username'), '');
+
+  -- If no username was provided, just skip profile creation
+  if raw_username is null then
+    return new;
+  end if;
+
+  -- Quick existence check to provide a clearer error message when username is taken.
+  if exists (
+    select 1 from public.user_profiles
+    where username_ci = lower(raw_username)
+  ) then
+    raise exception 'username % is already taken', raw_username;
+  end if;
+
+  -- Attempt insert; still catch unique_violation in case of a race.
+  begin
+    insert into public.user_profiles (user_id, username)
+    values (new.id, raw_username);
+  exception when unique_violation then
+    -- Another session claimed the username between the check and insert.
+    raise exception 'username % is already taken', raw_username;
+  end;
+
+  return new;
+end;
+$$;
+
+-- Trigger on auth.users to call the function
+drop trigger if exists on_auth_user_created on auth.users;
+
+create trigger on_auth_user_created
+after insert on auth.users
+for each row
+execute function public.handle_new_user_profile();
+```
+
+---
+
+If you'd like different files included (or fewer/more), tell me which ones and I will update this `AUTH_REFERENCE.md`.
