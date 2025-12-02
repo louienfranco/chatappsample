@@ -688,3 +688,37 @@ export default async function DashboardPage() {
   );
 }
 ```
+
+```tsx
+// app/dashboard/LogoutButton.tsx
+"use client";
+
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+
+export default function LogoutButton() {
+  const router = useRouter();
+  const supabase = createClient();
+
+  const handleLogout = async () => {
+    const { error } = await supabase.auth.signOut();
+
+    if (error) {
+      toast.error(error.message || "Failed to log out.");
+      return;
+    }
+
+    toast.success("Logged out successfully.");
+    router.push("/login");
+    router.refresh();
+  };
+
+  return (
+    <Button variant="outline" size="sm" onClick={handleLogout}>
+      Logout
+    </Button>
+  );
+}
+```
