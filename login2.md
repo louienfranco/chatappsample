@@ -23,8 +23,8 @@ export function createClient(): SupabaseClient {
 
 ```ts
 // lib/supabase/server.ts
-import { cookies } from 'next/headers';
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { cookies } from "next/headers";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 
 export async function createClient() {
   // In your Next version, cookies() returns a Promise
@@ -42,10 +42,10 @@ export async function createClient() {
           cookieStore.set({ name, value, ...options });
         },
         remove(name: string, options: CookieOptions) {
-          cookieStore.set({ name, value: '', ...options });
+          cookieStore.set({ name, value: "", ...options });
         },
       },
-    },
+    }
   );
 }
 ```
