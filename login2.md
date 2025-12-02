@@ -722,3 +722,74 @@ export default function LogoutButton() {
   );
 }
 ```
+
+```sql
+-- 1) App-level user_profiles table (store canonical username and verified flag)
+CREATE TABLE IF NOT EXISTS public.user_profiles (
+  user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  username text,
+  username_ci text GENERATED ALWAYS AS (lower(username)) STORED,
+  verified boolean DEFAULT false,
+  verified_at timestamptz
+);
+
+-- 2) Unique index on case-insensitive username
+CREATE UNIQUE INDEX IF NOT EXISTS user_profiles_username_ci_unique
+  ON public.user_profiles(username_ci)
+  WHERE username IS NOT NULL;
+
+ 
+-- Optional: use the citext extension for simpler case-insensitive usernames
+-- Uncomment and run these lines (once) if you prefer citext instead of the generated column + partial index.
+-- CREATE EXTENSION IF NOT EXISTS citext;
+-- ALTER TABLE public.user_profiles ALTER COLUMN username TYPE citext USING username::citext;
+-- ALTER TABLE public.user_profiles ADD CONSTRAINT user_profiles_username_unique UNIQUE (username);
+-- If you want to require usernames (no NULLs):
+-- ALTER TABLE public.user_profiles ALTER COLUMN username SET NOT NULL;
+-- Function to create a profile for every new auth user
+create or replace function public.handle_new_user_profile()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  raw_username text;
+begin
+  -- Read username from auth.user's raw_user_meta_data
+  raw_username := nullif(trim(new.raw_user_meta_data->>'username'), '');
+
+  -- If no username was provided, just skip profile creation
+  if raw_username is null then
+    return new;
+  end if;
+
+  -- Quick existence check to provide a clearer error message when username is taken.
+  if exists (
+    select 1 from public.user_profiles
+    where username_ci = lower(raw_username)
+  ) then
+    raise exception 'username % is already taken', raw_username;
+  end if;
+
+  -- Attempt insert; still catch unique_violation in case of a race.
+  begin
+    insert into public.user_profiles (user_id, username)
+    values (new.id, raw_username);
+  exception when unique_violation then
+    -- Another session claimed the username between the check and insert.
+    raise exception 'username % is already taken', raw_username;
+  end;
+
+  return new;
+end;
+$$;
+
+-- Trigger on auth.users to call the function
+drop trigger if exists on_auth_user_created on auth.users;
+
+create trigger on_auth_user_created
+after insert on auth.users
+for each row
+execute function public.handle_new_user_profile();
+```
